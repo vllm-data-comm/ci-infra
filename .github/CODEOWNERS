@@ -1,0 +1,9 @@
+# Code owners for this repository.
+#
+# Ownership is delegated to the @vllm-data-comm/committers team. To add or
+# remove committers, update the team (not this file):
+#   https://github.com/orgs/vllm-data-comm/teams/committers/members
+#
+# Note: CODEOWNERS only routes reviews; it grants no permissions. Write
+# access comes from the team's repository permissions.
+* @vllm-data-comm/committers
