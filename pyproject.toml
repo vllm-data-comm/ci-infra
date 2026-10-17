@@ -1,0 +1,16 @@
+[project]
+name = "lwd-checks"
+version = "0.1.0"
+description = "CI checks shared by vllm-data-comm repositories"
+requires-python = ">=3.12"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.14"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "B", "I", "UP"]
