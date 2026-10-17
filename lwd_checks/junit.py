@@ -10,10 +10,15 @@ from lwd_checks.results import LwdCheckResult, LwdFinding, lwd_write_results
 _LWD_MAX_MESSAGE_CHARS = 200
 
 
-def lwd_parse_junit(xml_text: str, *, check_id: str) -> LwdCheckResult:
-    root = ElementTree.fromstring(xml_text)
-    # pytest writes one <testsuite> root; junit-xml merges into one too.
-    suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+def lwd_parse_junit(xml_texts: list[str], *, check_id: str) -> LwdCheckResult:
+    """Merge one or more junitxml reports into a single check result."""
+    suites: list[ElementTree.Element] = []
+    for xml_text in xml_texts:
+        root = ElementTree.fromstring(xml_text)
+        # pytest writes one <testsuite> root; junit-xml merges into one too.
+        suites.extend(
+            [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+        )
     tests = sum(int(s.get("tests", 0)) for s in suites)
     failures = sum(int(s.get("failures", 0)) for s in suites)
     errors = sum(int(s.get("errors", 0)) for s in suites)
@@ -45,7 +50,7 @@ def lwd_parse_junit(xml_text: str, *, check_id: str) -> LwdCheckResult:
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="lwd_checks.junit")
-    parser.add_argument("--xml", required=True)
+    parser.add_argument("--xml", nargs="+", required=True)
     parser.add_argument("--check-id", required=True)
     parser.add_argument("--lane", required=True, choices=["fast", "slow"])
     parser.add_argument("--pr", type=int, required=True)
@@ -54,7 +59,8 @@ def main() -> None:
     args = parser.parse_args()
 
     result = lwd_parse_junit(
-        open(args.xml, encoding="utf-8").read(), check_id=args.check_id
+        [open(xml, encoding="utf-8").read() for xml in args.xml],
+        check_id=args.check_id,
     )
     lwd_write_results(
         args.out,

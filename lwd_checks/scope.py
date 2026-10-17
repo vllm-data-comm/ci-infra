@@ -204,12 +204,21 @@ def main() -> None:
     parser.add_argument("--head-sha", required=True)
     parser.add_argument("--upstream", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument(
+        "--files-out",
+        help="optional newline-separated list of own files that exist at head",
+    )
     args = parser.parse_args()
 
     scope = lwd_compute_scope(
         args.repo_dir, args.base_sha, args.head_sha, args.upstream
     )
     Path(args.out).write_text(json.dumps(lwd_scope_to_json(scope), indent=2) + "\n")
+    if args.files_out:
+        surviving = [f.path for f in scope.own_files if f.status != "deleted"]
+        Path(args.files_out).write_text(
+            "\n".join(surviving) + ("\n" if surviving else "")
+        )
 
 
 if __name__ == "__main__":

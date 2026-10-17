@@ -15,7 +15,7 @@ _JUNIT_SAMPLE = """<?xml version="1.0" encoding="utf-8"?>
 
 
 def test_junit_counts_and_failures():
-    result = lwd_parse_junit(_JUNIT_SAMPLE, check_id="lwd-unit-tests")
+    result = lwd_parse_junit([_JUNIT_SAMPLE], check_id="lwd-unit-tests")
 
     assert result.status == "fail"
     assert result.summary == "44 passed, 1 failed, 3 skipped"
@@ -29,7 +29,7 @@ def test_junit_all_pass():
   <testcase name="ok" time="0.1"/>
 </testsuite>
 """
-    result = lwd_parse_junit(passing, check_id="lwd-unit-tests")
+    result = lwd_parse_junit([passing], check_id="lwd-unit-tests")
     assert result.status == "pass"
     assert result.summary == "45 passed, 0 failed, 0 skipped"
 
@@ -73,3 +73,20 @@ def test_discover_picks_topmost_lwd_dirs(tmp_path: Path):
 def test_discover_empty_when_no_lwd_dirs(tmp_path: Path):
     (tmp_path / "tests/models").mkdir(parents=True)
     assert lwd_discover_test_dirs(tmp_path / "tests") == []
+
+
+def test_junit_merges_multiple_reports():
+    one = '''<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="tests" tests="10" failures="0" errors="0" skipped="1" time="0.1">
+</testsuite>
+'''
+    two = '''<?xml version="1.0" encoding="utf-8"?>
+<testsuite name="tests" tests="5" failures="1" errors="0" skipped="0" time="0.1">
+  <testcase name="bad" classname="c" time="0.1">
+    <failure message="boom">tb</failure>
+  </testcase>
+</testsuite>
+'''
+    result = lwd_parse_junit([one, two], check_id="lwd-unit-tests")
+    assert result.summary == "14 passed, 1 failed, 1 skipped"
+    assert result.status == "fail"
