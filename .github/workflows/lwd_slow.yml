@@ -88,7 +88,7 @@ jobs:
           if [ -s own-files.txt ]; then
             set +e
             # shellcheck disable=SC2046
-            SKIP= pre-commit run --hook-stage manual mypy-3.12 \
+            pre-commit run --hook-stage manual mypy-3.12 \
               --files $(cat own-files.txt) > mypy.log 2>&1
             set -e
             PYTHONPATH=ci python -m lwd_checks.mypy_report \
