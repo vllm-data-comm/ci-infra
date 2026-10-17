@@ -1,0 +1,173 @@
+name: LWD Fast
+
+on:
+  workflow_call:
+    inputs:
+      upstream_repo:
+        type: string
+        required: true
+        description: "owner/repo of the upstream project"
+      source_roots:
+        type: string
+        required: true
+        description: "comma-separated source roots, e.g. vllm/ or vllm_ascend/"
+      pre_commit_skip:
+        type: string
+        default: ""
+        description: "hooks to skip in pre-commit (SKIP syntax)"
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: vllm-data-comm/ci-infra
+          ref: main
+          sparse-checkout: lwd_checks
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Check the PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python -m lwd_checks.title_check --title "$PR_TITLE" \
+            --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" --out results/pr-title.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: lwd-results-fast-pr-title
+          path: results/pr-title.json
+
+  commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vllm-data-comm/ci-infra/.github/actions/lwd_prepare@main
+        with:
+          upstream_repo: ${{ inputs.upstream_repo }}
+      - name: Compute the PR's own scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          PYTHONPATH=ci python -m lwd_checks.scope \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --upstream upstream/main --out scope.json
+      - name: Check commit subjects and signoff
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          PYTHONPATH=ci python -m lwd_checks.commits_check \
+            --scope scope.json --pr "$PR_NUMBER" --out results/commits.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: lwd-results-fast-commits
+          path: results/commits.json
+
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vllm-data-comm/ci-infra/.github/actions/lwd_prepare@main
+        with:
+          upstream_repo: ${{ inputs.upstream_repo }}
+      - name: Compute the PR's own scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          PYTHONPATH=ci python -m lwd_checks.scope \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --upstream upstream/main --out scope.json --files-out own-files.txt
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run pre-commit on the PR's own files
+        env:
+          SKIP: ${{ inputs.pre_commit_skip }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python -m pip install --quiet pre-commit
+          status=pass
+          if [ -s own-files.txt ]; then
+            # shellcheck disable=SC2046
+            if ! pre-commit run --files $(cat own-files.txt) --show-diff-on-failure; then
+              status=fail
+            fi
+          fi
+          PYTHONPATH=ci python -m lwd_checks.results report \
+            --check-id pre-commit --status "$status" \
+            --summary "hooks on the PR's own files" \
+            --lane fast --pr "$PR_NUMBER" --head-sha "$HEAD_SHA" \
+            --out results/pre-commit.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: lwd-results-fast-pre-commit
+          path: results/pre-commit.json
+
+  standards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vllm-data-comm/ci-infra/.github/actions/lwd_prepare@main
+        with:
+          upstream_repo: ${{ inputs.upstream_repo }}
+      - name: Compute the PR's own scope
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          PYTHONPATH=ci python -m lwd_checks.scope \
+            --base-sha "$BASE_SHA" --head-sha "$HEAD_SHA" \
+            --upstream upstream/main --out scope.json
+      - name: Run the advisory standards rules
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          printf '%s' "$PR_TITLE" > title.txt
+          printf '%s' "$PR_BODY" > body.txt
+          for root in $(echo "${{ inputs.source_roots }}" | tr ',' ' '); do
+            PYTHONPATH=ci python -m lwd_checks.standards \
+              --scope scope.json --source-root "$root" --upstream upstream/main \
+              --pr "$PR_NUMBER" --out-dir results
+            PYTHONPATH=ci python -m lwd_checks.file_rules \
+              --scope scope.json --source-root "$root" --upstream upstream/main \
+              --pr "$PR_NUMBER" --out-dir results
+          done
+          PYTHONPATH=ci python -m lwd_checks.pr_meta \
+            --scope scope.json --title-file title.txt --body-file body.txt \
+            --repo "${{ github.repository }}" --pr "$PR_NUMBER" --out-dir results
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: lwd-results-fast-standards
+          path: results/
+
+  lwd-fast-gate:
+    needs: [pr-title, commits, pre-commit, standards]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vllm-data-comm/ci-infra/.github/actions/lwd_prepare@main
+        with:
+          upstream_repo: ${{ inputs.upstream_repo }}
+          product_checkout: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: lwd-results-fast-*
+          path: results
+          merge-multiple: true
+      - name: Gate the fast lane
+        run: PYTHONPATH=ci python -m lwd_checks.gate --lane fast --results-dir results
