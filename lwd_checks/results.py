@@ -62,7 +62,9 @@ def lwd_write_results(
             for r in results
         ],
     }
-    Path(path).write_text(json.dumps(payload, indent=2) + "\n")
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def lwd_parse_results_payload(

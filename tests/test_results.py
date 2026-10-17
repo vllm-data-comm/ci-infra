@@ -82,3 +82,9 @@ def test_exit_code_follows_catalog_gating():
     assert lwd_exit_code(LwdCheckResult("pr-title", "fail"), required) == 1
     assert lwd_exit_code(LwdCheckResult("param-count", "fail"), advisory) == 0
     assert lwd_exit_code(LwdCheckResult("pr-title", "error"), advisory) == 1
+
+
+def test_write_creates_missing_directories(tmp_path: Path):
+    out = tmp_path / "nested" / "results" / "r.json"
+    lwd_write_results(out, lane="fast", pr_number=1, head_sha="a", results=[])
+    assert out.exists()
