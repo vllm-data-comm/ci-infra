@@ -65,20 +65,21 @@ def lwd_write_results(
     Path(path).write_text(json.dumps(payload, indent=2) + "\n")
 
 
-def _parse_results_file(path: Path) -> tuple[str, list[LwdCheckResult]]:
-    payload = json.loads(path.read_text())
+def lwd_parse_results_payload(
+    payload: dict, source: str
+) -> tuple[str, list[LwdCheckResult]]:
     if payload.get("schema") != LWD_RESULTS_SCHEMA:
-        raise ValueError(f"{path}: unsupported schema {payload.get('schema')}")
+        raise ValueError(f"{source}: unsupported schema {payload.get('schema')}")
     lane = payload["lane"]
     if lane not in ("fast", "slow"):
-        raise ValueError(f"{path}: unknown lane {lane}")
+        raise ValueError(f"{source}: unknown lane {lane}")
     results = []
     for check in payload["checks"]:
         check_id = check["check_id"]
         if check_id not in LWD_CHECK_CATALOG:
-            raise ValueError(f"{path}: {check_id} not-in-catalog")
+            raise ValueError(f"{source}: {check_id} not-in-catalog")
         if check["status"] not in LWD_STATUSES:
-            raise ValueError(f"{path}: unknown status {check['status']}")
+            raise ValueError(f"{source}: unknown status {check['status']}")
         findings = tuple(
             LwdFinding(
                 path=f["path"],
@@ -107,7 +108,9 @@ def lwd_load_results(path: Path | str) -> tuple[str, list[LwdCheckResult]]:
     lanes: set[str] = set()
     results: list[LwdCheckResult] = []
     for file in files:
-        lane, loaded = _parse_results_file(file)
+        lane, loaded = lwd_parse_results_payload(
+            json.loads(file.read_text()), source=str(file)
+        )
         lanes.add(lane)
         results.extend(loaded)
     if len(lanes) > 1:
