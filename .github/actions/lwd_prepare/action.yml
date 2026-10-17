@@ -1,0 +1,40 @@
+name: Prepare the LWD checks
+description: >-
+  Check out the PR head of the calling repository, fetch the upstream
+  commit graph (commits only), and lay out lwd_checks under ci/ with
+  Python 3.12.
+inputs:
+  upstream_repo:
+    description: "owner/repo of the upstream project, e.g. vllm-project/vllm"
+    required: true
+  product_checkout:
+    description: "check out the calling repository at the PR head"
+    type: boolean
+    default: true
+runs:
+  using: composite
+  steps:
+    - name: Check out the PR head
+      if: inputs.product_checkout == 'true'
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - name: Fetch the upstream commit graph
+      if: inputs.product_checkout == 'true'
+      shell: bash
+      run: |
+        git remote add upstream "https://github.com/${{ inputs.upstream_repo }}.git"
+        git config remote.upstream.promisor true
+        git config remote.upstream.partialclonefilter tree:0
+        git fetch -q --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
+    - name: Check out lwd_checks
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: vllm-data-comm/ci-infra
+        ref: main
+        sparse-checkout: lwd_checks
+        path: ci
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: "3.12"
