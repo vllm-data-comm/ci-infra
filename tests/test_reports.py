@@ -76,17 +76,17 @@ def test_discover_empty_when_no_lwd_dirs(tmp_path: Path):
 
 
 def test_junit_merges_multiple_reports():
-    one = '''<?xml version="1.0" encoding="utf-8"?>
+    one = """<?xml version="1.0" encoding="utf-8"?>
 <testsuite name="tests" tests="10" failures="0" errors="0" skipped="1" time="0.1">
 </testsuite>
-'''
-    two = '''<?xml version="1.0" encoding="utf-8"?>
+"""
+    two = """<?xml version="1.0" encoding="utf-8"?>
 <testsuite name="tests" tests="5" failures="1" errors="0" skipped="0" time="0.1">
   <testcase name="bad" classname="c" time="0.1">
     <failure message="boom">tb</failure>
   </testcase>
 </testsuite>
-'''
+"""
     result = lwd_parse_junit([one, two], check_id="lwd-unit-tests")
     assert result.summary == "14 passed, 1 failed, 1 skipped"
     assert result.status == "fail"
