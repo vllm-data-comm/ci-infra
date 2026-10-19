@@ -11,10 +11,13 @@ from lwd_checks.catalog import (
     LWD_CHECK_CATALOG,
     LWD_GATING_ADVISORY,
     LWD_GATING_REQUIRED,
+    LWD_LANE_FAST,
+    LWD_LANES,
 )
 from lwd_checks.results import LwdCheckResult
 
 LWD_COMMENT_MARKER = "<!-- lwd-ci-checklist -->"
+_LWD_LANE_TITLES = {LWD_LANE_FAST: "Fast lane"}
 _LWD_MAX_FINDINGS_PER_CHECK = 50
 _LWD_MAX_FINDING_CHARS = 200
 _LWD_MAX_COMMENT_CHARS = 60000
@@ -56,12 +59,9 @@ def _lwd_check_line(result: LwdCheckResult | None, spec) -> list[str]:
 
 
 def _lwd_lane_section(
-    lane: str, results: list[LwdCheckResult] | None, head_sha: str, bypassed: bool
+    lane: str, results: list[LwdCheckResult] | None, head_sha: str
 ) -> list[str]:
-    label = "Fast lane" if lane == "fast" else "Slow lane"
-    lines = [f"**{label}** · `{head_sha[:7]}`", ""]
-    if bypassed:
-        lines.insert(1, "> The `no-test` label bypassed this lane for merging.")
+    lines = [f"**{_LWD_LANE_TITLES[lane]}** · `{head_sha[:7]}`", ""]
     if results is None:
         lines.append("- lane did not run yet")
         return lines
@@ -73,18 +73,14 @@ def _lwd_lane_section(
 
 
 def lwd_render_checklist(
-    fast_results: list[LwdCheckResult] | None,
-    slow_results: list[LwdCheckResult] | None,
-    head_sha: str,
-    *,
-    slow_bypassed: bool = False,
+    results_by_lane: dict[str, list[LwdCheckResult] | None], head_sha: str
 ) -> str:
-    lines = [LWD_COMMENT_MARKER, "### LWD CI checklist", ""]
-    lines.extend(_lwd_lane_section("fast", fast_results, head_sha, bypassed=False))
-    lines.append("")
-    lines.extend(
-        _lwd_lane_section("slow", slow_results, head_sha, bypassed=slow_bypassed)
-    )
+    """Render every lane in catalog order; a lane missing from the map
+    renders as not run yet."""
+    lines = [LWD_COMMENT_MARKER, "### LWD CI checklist"]
+    for lane in LWD_LANES:
+        lines.append("")
+        lines.extend(_lwd_lane_section(lane, results_by_lane.get(lane), head_sha))
     text = "\n".join(lines) + "\n"
     if len(text) > _LWD_MAX_COMMENT_CHARS:
         note = "\n… (checklist truncated)"

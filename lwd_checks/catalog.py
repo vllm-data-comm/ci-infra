@@ -2,8 +2,8 @@
 
 Every check has two independent attributes:
 
-- lane: "fast" (result in ~2 min, reruns on every PR edit) or "slow"
-  (no time limit, reruns only when code is pushed).
+- lane: when the result arrives. The fast lane reports in ~2 min and
+  reruns on every PR edit.
 - gating: "required" (blocks merging via the lane gate) or "advisory"
   (only appears in the checklist comment).
 
@@ -16,7 +16,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 LWD_LANE_FAST = "fast"
-LWD_LANE_SLOW = "slow"
+# TODO(tu10ng): add the slow lane (LWD unit tests, mypy) once main's tests
+# are meaningful, vllm-data-comm/ci-infra#4
+LWD_LANES = (LWD_LANE_FAST,)
 LWD_GATING_REQUIRED = "required"
 LWD_GATING_ADVISORY = "advisory"
 
@@ -52,9 +54,5 @@ LWD_CHECK_CATALOG: dict[str, LwdCheckSpec] = {
         LwdCheckSpec(
             "bugfix-tests", "Bugfix tests", LWD_LANE_FAST, LWD_GATING_ADVISORY
         ),
-        LwdCheckSpec(
-            "lwd-unit-tests", "LWD unit tests", LWD_LANE_SLOW, LWD_GATING_REQUIRED
-        ),
-        LwdCheckSpec("mypy", "mypy", LWD_LANE_SLOW, LWD_GATING_ADVISORY),
     )
 }

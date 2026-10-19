@@ -16,15 +16,24 @@ from __future__ import annotations
 import io
 import json
 import os
+import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from typing import Protocol
 
+from lwd_checks.catalog import LWD_LANE_FAST, LWD_LANES
 from lwd_checks.render import LWD_COMMENT_MARKER, lwd_render_checklist
 from lwd_checks.results import LwdCheckResult, lwd_parse_results_payload
 
-LWD_LANE_WORKFLOW_FILES = ("lwd_fast.yml", "lwd_slow.yml")
+LWD_LANE_WORKFLOW_FILES = {LWD_LANE_FAST: "lwd_fast.yml"}
 _LWD_ARTIFACT_PREFIX = "lwd-results-"
+_LWD_REDIRECT_CODES = (301, 302, 303, 307, 308)
+
+
+class _LwdNoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 class LwdGithubApi(Protocol):
@@ -59,6 +68,9 @@ class LwdUrllibApi:
         return self._json_request(path, "GET")
 
     def get_binary(self, url: str) -> bytes:
+        # The token only goes to the API. Artifact downloads redirect to
+        # signed blob storage, which rejects a forwarded Authorization header
+        # with 401 (urllib keeps headers across redirects).
         request = urllib.request.Request(
             url,
             headers={
@@ -66,7 +78,15 @@ class LwdUrllibApi:
                 "Authorization": f"Bearer {self._token}",
             },
         )
-        with urllib.request.urlopen(request, timeout=30) as response:
+        opener = urllib.request.build_opener(_LwdNoRedirect)
+        try:
+            with opener.open(request, timeout=30) as response:
+                return response.read()
+        except urllib.error.HTTPError as error:
+            if error.code not in _LWD_REDIRECT_CODES:
+                raise
+            location = urllib.parse.urljoin(url, error.headers["Location"])
+        with urllib.request.urlopen(location, timeout=30) as response:
             return response.read()
 
     def post(self, path: str, payload: dict) -> object:
@@ -107,27 +127,35 @@ def _lwd_collect_lane(
     return results
 
 
+def _lwd_find_open_pull(api: LwdGithubApi, repo: str, run: dict) -> dict | None:
+    """The open PR into this repository whose head is the run's head branch.
+
+    `/commits/{sha}/pulls` only knows commits of this repository, so it
+    returns nothing for fork PRs; the head branch filter covers both.
+    """
+    head = urllib.parse.quote(
+        f"{run['head_repository']['owner']['login']}:{run['head_branch']}", safe=""
+    )
+    pulls = api.get(f"/repos/{repo}/pulls?state=open&head={head}&per_page=100")
+    return next(
+        (p for p in pulls if p["base"]["repo"]["full_name"] == repo),
+        None,
+    )
+
+
 def lwd_run_relay(api: LwdGithubApi, repo: str, run_id: int) -> None:
     run = api.get(f"/repos/{repo}/actions/runs/{run_id}")
     head_sha = run["head_sha"]
 
-    pulls = api.get(f"/repos/{repo}/commits/{head_sha}/pulls")
-    pull = next(
-        (
-            p
-            for p in pulls
-            if p.get("state") == "open"
-            and p.get("base", {}).get("repo", {}).get("full_name") == repo
-        ),
-        None,
-    )
+    pull = _lwd_find_open_pull(api, repo, run)
     if pull is None or pull["head"]["sha"] != head_sha:
         return  # stale run: the PR moved on
 
-    fast = _lwd_collect_lane(api, repo, "lwd_fast.yml", head_sha)
-    slow = _lwd_collect_lane(api, repo, "lwd_slow.yml", head_sha)
-    no_test = any(label["name"] == "no-test" for label in pull.get("labels", []))
-    text = lwd_render_checklist(fast, slow, head_sha, slow_bypassed=no_test)
+    results_by_lane = {
+        lane: _lwd_collect_lane(api, repo, LWD_LANE_WORKFLOW_FILES[lane], head_sha)
+        for lane in LWD_LANES
+    }
+    text = lwd_render_checklist(results_by_lane, head_sha)
 
     number = pull["number"]
     comments = api.get(f"/repos/{repo}/issues/{number}/comments?per_page=100")

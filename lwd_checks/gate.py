@@ -1,15 +1,14 @@
 """Lane gates: the required checks of a lane must all have run and passed.
 
 A skipped job counts as passing in GitHub's branch protection, so the
-gate refuses to succeed when a required check is simply missing. The
-`no-test` label bypasses the slow lane only (AGENTS.md section 4).
+gate refuses to succeed when a required check is simply missing.
 """
 
 from __future__ import annotations
 
 import argparse
 
-from lwd_checks.catalog import LWD_CHECK_CATALOG, LWD_GATING_REQUIRED
+from lwd_checks.catalog import LWD_CHECK_CATALOG, LWD_GATING_REQUIRED, LWD_LANES
 from lwd_checks.results import (
     LwdCheckResult,
     LwdFinding,
@@ -17,12 +16,7 @@ from lwd_checks.results import (
 )
 
 
-def lwd_gate(
-    lane: str,
-    results: list[LwdCheckResult],
-    *,
-    no_test: bool = False,
-) -> tuple[int, LwdCheckResult]:
+def lwd_gate(lane: str, results: list[LwdCheckResult]) -> tuple[int, LwdCheckResult]:
     check_id = f"{lane}-gate"
     known_ids = set(LWD_CHECK_CATALOG)
     unknown = sorted(r.check_id for r in results if r.check_id not in known_ids)
@@ -33,16 +27,6 @@ def lwd_gate(
                 check_id=check_id,
                 status="error",
                 summary=f"unknown check ids: {', '.join(unknown)}",
-            ),
-        )
-
-    if lane == "slow" and no_test:
-        return (
-            0,
-            LwdCheckResult(
-                check_id=check_id,
-                status="pass",
-                summary="slow lane bypassed via the no-test label",
             ),
         )
 
@@ -74,13 +58,12 @@ def lwd_gate(
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="lwd_checks.gate")
-    parser.add_argument("--lane", required=True, choices=["fast", "slow"])
+    parser.add_argument("--lane", required=True, choices=LWD_LANES)
     parser.add_argument("--results-dir", required=True)
-    parser.add_argument("--no-test", action="store_true")
     args = parser.parse_args()
 
     _lane, results = lwd_load_results(args.results_dir)
-    code, _gate_result = lwd_gate(args.lane, results, no_test=args.no_test)
+    code, _gate_result = lwd_gate(args.lane, results)
     raise SystemExit(code)
 
 
