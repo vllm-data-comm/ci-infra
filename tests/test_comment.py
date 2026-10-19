@@ -1,9 +1,14 @@
 import io
 import json
+import threading
 import zipfile
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from lwd_checks.comment import lwd_run_relay
+import pytest
+
+from lwd_checks.comment import LwdUrllibApi, lwd_run_relay
 from lwd_checks.render import LWD_COMMENT_MARKER
 from lwd_checks.results import (
     LwdCheckResult,
@@ -14,6 +19,8 @@ from lwd_checks.results import (
 
 REPO = "vllm-data-comm/vllm"
 SHA = "0123abcdef0123abcdef0123abcdef0123abcd"
+HEAD_OWNER = "vllm-data-comm"
+HEAD_BRANCH = "feat/x"
 
 
 class _FakeApi:
@@ -73,14 +80,24 @@ def _artifact_zip(checks: list[LwdCheckResult], lane: str) -> bytes:
     return buffer.getvalue()
 
 
+def _pulls_path(owner: str, branch: str) -> str:
+    head = f"{owner}%3A{branch.replace('/', '%2F')}"
+    return f"/repos/{REPO}/pulls?state=open&head={head}&per_page=100"
+
+
 def _api_with_fast_lane(
     fast_checks: list[LwdCheckResult] | None,
     *,
     existing_comment: dict | None = None,
+    head_owner: str = HEAD_OWNER,
 ) -> _FakeApi:
     api = _FakeApi()
-    api.get_responses[f"/repos/{REPO}/actions/runs/11"] = {"head_sha": SHA}
-    api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = [_pr()]
+    api.get_responses[f"/repos/{REPO}/actions/runs/11"] = {
+        "head_sha": SHA,
+        "head_branch": HEAD_BRANCH,
+        "head_repository": {"owner": {"login": head_owner}},
+    }
+    api.get_responses[_pulls_path(head_owner, HEAD_BRANCH)] = [_pr()]
     runs_path = (
         f"/repos/{REPO}/actions/workflows/lwd_fast.yml/runs"
         f"?head_sha={SHA}&event=pull_request&per_page=1"
@@ -126,6 +143,18 @@ def test_relay_posts_rendered_comment():
     assert "`vllm/x.py:3` ping `@`room" in payload["body"]
 
 
+def test_relay_finds_a_pr_opened_from_a_fork():
+    """Regression: fork PRs were looked up by commit SHA, which only knows
+    commits of the base repository, so they never got a comment."""
+    api = _api_with_fast_lane(_fast_all_pass(), head_owner="contributor")
+
+    lwd_run_relay(api, REPO, 11)
+
+    assert [path for path, _payload in api.posts] == [
+        f"/repos/{REPO}/issues/7/comments"
+    ]
+
+
 def test_relay_updates_existing_marker_comment_in_place():
     existing = {"id": 55, "body": LWD_COMMENT_MARKER + "\nold"}
     api = _api_with_fast_lane(_fast_all_pass(), existing_comment=existing)
@@ -141,7 +170,7 @@ def test_stale_pr_head_makes_relay_skip():
     api = _api_with_fast_lane(_fast_all_pass())
     moved = _pr()
     moved["head"]["sha"] = "f" * 40
-    api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = [moved]
+    api.get_responses[_pulls_path(HEAD_OWNER, HEAD_BRANCH)] = [moved]
 
     lwd_run_relay(api, REPO, 11)
 
@@ -150,7 +179,7 @@ def test_stale_pr_head_makes_relay_skip():
 
 def test_missing_pr_makes_relay_skip():
     api = _api_with_fast_lane(_fast_all_pass())
-    api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = []
+    api.get_responses[_pulls_path(HEAD_OWNER, HEAD_BRANCH)] = []
 
     lwd_run_relay(api, REPO, 11)
 
@@ -181,3 +210,42 @@ def test_results_roundtrip_through_payload_parser(tmp_path: Path):
     )
     assert lane == "fast"
     assert results[0].check_id == "commits"
+
+
+class _ArtifactServer(BaseHTTPRequestHandler):
+    """Mimics the API redirecting an artifact download to blob storage,
+    which rejects any Authorization header."""
+
+    def do_GET(self) -> None:
+        if self.path == "/artifact":
+            self.send_response(302)
+            self.send_header("Location", "/blob")
+            self.end_headers()
+        elif self.headers.get("Authorization") is not None:
+            self.send_response(401)
+            self.end_headers()
+        else:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"zip-bytes")
+
+    def log_message(self, format: str, *args: object) -> None:
+        pass
+
+
+@pytest.fixture
+def artifact_server_url() -> Iterator[str]:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _ArtifactServer)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    yield f"http://127.0.0.1:{server.server_address[1]}"
+    server.shutdown()
+    server.server_close()
+
+
+def test_artifact_download_drops_the_token_on_redirect(artifact_server_url: str):
+    """Regression: the token was forwarded to blob storage, which answered
+    401, so the relay crashed on every run."""
+    api = LwdUrllibApi("secret-token")
+
+    assert api.get_binary(f"{artifact_server_url}/artifact") == b"zip-bytes"

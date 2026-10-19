@@ -139,7 +139,7 @@ The gate job needs every job in its lane with `if: always()`. It fails if any re
 
 `lwd_checklist.yml` runs on `workflow_run` (`completed`) of a lane. Fork PRs get a read-only token, so the lanes cannot comment themselves; the relay runs in the base repository with `pull-requests: write` and `actions: read`.
 
-1. Take the PR number from the run's artifact, fetch that PR, and continue only if its current head SHA equals `workflow_run.head_sha` and it targets this repository. This binds an untrusted number to a trusted SHA and drops stale runs.
+1. Find the open PR into this repository whose head is the run's head repository and branch — trusted `workflow_run` fields — and continue only if its current head SHA equals `workflow_run.head_sha`. (`/commits/{sha}/pulls` cannot see fork PRs, so the head filter is used.) This drops stale runs.
 2. For that head SHA, fetch the latest run of each lane and its result artifacts, and validate them against the schema.
 3. Rebuild the whole comment from every lane and upsert it.
 
@@ -224,7 +224,7 @@ One comment per PR, created by the relay and updated in place. It is posted even
 ## Security
 
 - Lanes use `pull_request`, never `pull_request_target`. Fork code runs with a read-only token and no secrets.
-- The relay runs base-repository code with a write token. It never checks out or executes PR code. It parses the artifact as data against the schema, and binds the PR number to the trusted `workflow_run.head_sha`.
+- The relay runs base-repository code with a write token. It never checks out or executes PR code. It parses the artifact as data against the schema, and finds the PR through the trusted `workflow_run` head fields. Artifact downloads stop at the redirect and fetch the signed URL without the token.
 - Rendered findings are escaped: backticks, `|`, HTML, and `@` (no pings). Each finding and the whole comment are length-capped below GitHub's 65,536-character limit.
 - A PR can edit the caller workflows to skip checks. CODEOWNERS covers this in `vllm` and `vllm-ascend`: every file, `.github/` included, needs committer review.
 - ci-infra requires no approval, so a ci-infra change reaches both repositories' gates without a second reviewer. Its `test.yml` is the remaining gate.
