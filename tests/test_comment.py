@@ -38,14 +38,13 @@ class _FakeApi:
         return {}
 
 
-def _pr(number: int = 7, labels: tuple[str, ...] = ()) -> dict:
+def _pr(number: int = 7) -> dict:
     return {
         "number": number,
         "state": "open",
         "merged_at": None,
         "head": {"sha": SHA},
         "base": {"repo": {"full_name": REPO}},
-        "labels": [{"name": name} for name in labels],
     }
 
 
@@ -74,42 +73,28 @@ def _artifact_zip(checks: list[LwdCheckResult], lane: str) -> bytes:
     return buffer.getvalue()
 
 
-def _api_with_lanes(
+def _api_with_fast_lane(
     fast_checks: list[LwdCheckResult] | None,
-    slow_checks: list[LwdCheckResult] | None,
     *,
-    labels: tuple[str, ...] = (),
     existing_comment: dict | None = None,
 ) -> _FakeApi:
     api = _FakeApi()
     api.get_responses[f"/repos/{REPO}/actions/runs/11"] = {"head_sha": SHA}
-    api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = [_pr(labels=labels)]
-    for workflow_file, checks, lane_run_id in (
-        ("lwd_fast.yml", fast_checks, 21),
-        ("lwd_slow.yml", slow_checks, 22),
-    ):
-        if checks is None:
-            api.get_responses[
-                f"/repos/{REPO}/actions/workflows/{workflow_file}/runs"
-                f"?head_sha={SHA}&event=pull_request&per_page=1"
-            ] = {"workflow_runs": []}
-            continue
-        api.get_responses[
-            f"/repos/{REPO}/actions/workflows/{workflow_file}/runs"
-            f"?head_sha={SHA}&event=pull_request&per_page=1"
-        ] = {"workflow_runs": [{"id": lane_run_id}]}
-        lane = "fast" if "fast" in workflow_file else "slow"
-        api.get_responses[
-            f"/repos/{REPO}/actions/runs/{lane_run_id}/artifacts?per_page=100"
-        ] = {
+    api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = [_pr()]
+    runs_path = (
+        f"/repos/{REPO}/actions/workflows/lwd_fast.yml/runs"
+        f"?head_sha={SHA}&event=pull_request&per_page=1"
+    )
+    if fast_checks is None:
+        api.get_responses[runs_path] = {"workflow_runs": []}
+    else:
+        api.get_responses[runs_path] = {"workflow_runs": [{"id": 21}]}
+        api.get_responses[f"/repos/{REPO}/actions/runs/21/artifacts?per_page=100"] = {
             "artifacts": [
-                {
-                    "name": f"lwd-results-{lane}-job",
-                    "archive_download_url": f"zip://{lane}",
-                }
+                {"name": "lwd-results-fast-job", "archive_download_url": "zip://fast"}
             ]
         }
-        api.binaries[f"zip://{lane}"] = _artifact_zip(checks, lane)
+        api.binaries["zip://fast"] = _artifact_zip(fast_checks, "fast")
     api.get_responses[f"/repos/{REPO}/issues/7/comments?per_page=100"] = (
         [existing_comment] if existing_comment else []
     )
@@ -129,13 +114,8 @@ def _fast_all_pass() -> list[LwdCheckResult]:
     ]
 
 
-def test_relay_posts_rendered_comment_for_both_lanes(tmp_path: Path):
-    fast = _fast_all_pass()
-    slow = [
-        LwdCheckResult(check_id="lwd-unit-tests", status="pass", summary="9 passed"),
-        LwdCheckResult(check_id="mypy", status="pass"),
-    ]
-    api = _api_with_lanes(fast, slow)
+def test_relay_posts_rendered_comment():
+    api = _api_with_fast_lane(_fast_all_pass())
 
     lwd_run_relay(api, REPO, 11)
 
@@ -144,12 +124,11 @@ def test_relay_posts_rendered_comment_for_both_lanes(tmp_path: Path):
     assert path == f"/repos/{REPO}/issues/7/comments"
     assert payload["body"].startswith(LWD_COMMENT_MARKER)
     assert "`vllm/x.py:3` ping `@`room" in payload["body"]
-    assert "9 passed" in payload["body"]
 
 
 def test_relay_updates_existing_marker_comment_in_place():
     existing = {"id": 55, "body": LWD_COMMENT_MARKER + "\nold"}
-    api = _api_with_lanes(_fast_all_pass(), None, existing_comment=existing)
+    api = _api_with_fast_lane(_fast_all_pass(), existing_comment=existing)
 
     lwd_run_relay(api, REPO, 11)
 
@@ -159,7 +138,7 @@ def test_relay_updates_existing_marker_comment_in_place():
 
 
 def test_stale_pr_head_makes_relay_skip():
-    api = _api_with_lanes(_fast_all_pass(), None)
+    api = _api_with_fast_lane(_fast_all_pass())
     moved = _pr()
     moved["head"]["sha"] = "f" * 40
     api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = [moved]
@@ -170,7 +149,7 @@ def test_stale_pr_head_makes_relay_skip():
 
 
 def test_missing_pr_makes_relay_skip():
-    api = _api_with_lanes(_fast_all_pass(), None)
+    api = _api_with_fast_lane(_fast_all_pass())
     api.get_responses[f"/repos/{REPO}/commits/{SHA}/pulls"] = []
 
     lwd_run_relay(api, REPO, 11)
@@ -178,33 +157,14 @@ def test_missing_pr_makes_relay_skip():
     assert not api.posts and not api.patches
 
 
-def test_missing_slow_lane_renders_as_did_not_run():
-    api = _api_with_lanes(_fast_all_pass(), None)
-
-    lwd_run_relay(api, REPO, 11)
-
-    body = api.posts[0][1]["body"]
-    assert "Slow lane" in body
-    assert "did not run" in body
-
-
 def test_corrupt_artifact_degrades_to_did_not_run():
-    api = _api_with_lanes(_fast_all_pass(), None)
+    api = _api_with_fast_lane(_fast_all_pass())
     api.binaries["zip://fast"] = b"not a zip"
 
     lwd_run_relay(api, REPO, 11)
 
     body = api.posts[0][1]["body"]
     assert "did not run" in body
-
-
-def test_no_test_label_marks_slow_lane_bypassed():
-    api = _api_with_lanes(_fast_all_pass(), None, labels=("no-test",))
-
-    lwd_run_relay(api, REPO, 11)
-
-    body = api.posts[0][1]["body"]
-    assert "no-test" in body
 
 
 def test_results_roundtrip_through_payload_parser(tmp_path: Path):

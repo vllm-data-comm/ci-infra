@@ -16,7 +16,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from lwd_checks.catalog import LWD_CHECK_CATALOG, LwdCheckSpec
+from lwd_checks.catalog import LWD_CHECK_CATALOG, LWD_LANES, LwdCheckSpec
 
 LWD_RESULTS_SCHEMA = 1
 LWD_STATUSES = ("pass", "fail", "error")
@@ -73,7 +73,7 @@ def lwd_parse_results_payload(
     if payload.get("schema") != LWD_RESULTS_SCHEMA:
         raise ValueError(f"{source}: unsupported schema {payload.get('schema')}")
     lane = payload["lane"]
-    if lane not in ("fast", "slow"):
+    if lane not in LWD_LANES:
         raise ValueError(f"{source}: unknown lane {lane}")
     results = []
     for check in payload["checks"]:
@@ -136,7 +136,7 @@ def main() -> None:
     report.add_argument("--check-id", required=True)
     report.add_argument("--status", required=True, choices=LWD_STATUSES)
     report.add_argument("--summary", default="")
-    report.add_argument("--lane", required=True, choices=["fast", "slow"])
+    report.add_argument("--lane", required=True, choices=LWD_LANES)
     report.add_argument("--pr", type=int, required=True)
     report.add_argument("--head-sha", required=True)
     report.add_argument("--out", required=True)

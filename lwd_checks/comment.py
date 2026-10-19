@@ -20,10 +20,11 @@ import urllib.request
 import zipfile
 from typing import Protocol
 
+from lwd_checks.catalog import LWD_LANE_FAST, LWD_LANES
 from lwd_checks.render import LWD_COMMENT_MARKER, lwd_render_checklist
 from lwd_checks.results import LwdCheckResult, lwd_parse_results_payload
 
-LWD_LANE_WORKFLOW_FILES = ("lwd_fast.yml", "lwd_slow.yml")
+LWD_LANE_WORKFLOW_FILES = {LWD_LANE_FAST: "lwd_fast.yml"}
 _LWD_ARTIFACT_PREFIX = "lwd-results-"
 
 
@@ -124,10 +125,11 @@ def lwd_run_relay(api: LwdGithubApi, repo: str, run_id: int) -> None:
     if pull is None or pull["head"]["sha"] != head_sha:
         return  # stale run: the PR moved on
 
-    fast = _lwd_collect_lane(api, repo, "lwd_fast.yml", head_sha)
-    slow = _lwd_collect_lane(api, repo, "lwd_slow.yml", head_sha)
-    no_test = any(label["name"] == "no-test" for label in pull.get("labels", []))
-    text = lwd_render_checklist(fast, slow, head_sha, slow_bypassed=no_test)
+    results_by_lane = {
+        lane: _lwd_collect_lane(api, repo, LWD_LANE_WORKFLOW_FILES[lane], head_sha)
+        for lane in LWD_LANES
+    }
+    text = lwd_render_checklist(results_by_lane, head_sha)
 
     number = pull["number"]
     comments = api.get(f"/repos/{repo}/issues/{number}/comments?per_page=100")

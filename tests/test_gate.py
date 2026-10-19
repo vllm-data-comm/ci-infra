@@ -45,18 +45,3 @@ def test_unknown_check_id_fails_gate():
     code, result = lwd_gate("fast", results)
     assert code == 1
     assert "made-up-check" in result.summary
-
-
-def test_no_test_bypasses_slow_gate_only():
-    slow_results = [LwdCheckResult(check_id="lwd-unit-tests", status="fail")]
-    code, result = lwd_gate("slow", slow_results, no_test=True)
-    assert code == 0
-    assert "no-test" in result.summary
-
-    code, _result = lwd_gate("slow", slow_results, no_test=False)
-    assert code == 1
-
-    fast_failed = _fast_required_all_pass()
-    fast_failed[0] = LwdCheckResult(check_id="pr-title", status="fail")
-    code, _result = lwd_gate("fast", fast_failed, no_test=True)
-    assert code == 1
