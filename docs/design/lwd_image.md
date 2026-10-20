@@ -66,7 +66,9 @@ Decisions:
 | `nightly-YYYYMMDD[-a3]` | one per day, kept |
 | `sha-<vllm short sha>[-a3]` | the exact vllm commit in the image, for reproducing a build |
 
-Expected duration on the 4-core arm runner: roughly 30 minutes to 1.5 hours, dominated by rebuilding vllm's C extension and the Rust frontend. The first build also downloads build dependencies that pip's isolation does not reuse.
+Expected duration on the 4-core arm runner: roughly 30 minutes to 1.5 hours, dominated by the vllm editable install and the Rust frontend rebuild. The first build also downloads build dependencies that pip's isolation does not reuse.
+
+- **vllm-ascend is overlaid, not replaced, and installed as pure Python.** The base image's prebuilt csrc kernels (`csrc/build`, loaded at runtime) survive the source swap — a full-tree `COPY` would delete them, and the fork's csrc does not build standalone anyway (its CausalConv1d op definition and compile info disagree; identical failure under CANN 9.1.0 and 9.2.0). `COMPILE_CUSTOM_KERNELS=0` keeps the official prebuilt kernels, mirroring how the real-machine bring-up swaps Python sources on top of a working install. Revisit once the fork's csrc builds cleanly (issue #18).
 
 ## Runbook
 
