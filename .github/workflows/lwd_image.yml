@@ -72,8 +72,8 @@ jobs:
       - name: Resolve the build parameters
         run: |
           case "${{ inputs.soc }}" in
-            a2) suffix="" ; default_base="v0.30.0rc2" ;;
-            a3) suffix="-a3" ; default_base="v0.30.0rc2-a3" ;;
+            a2) suffix="" ; default_base="v0.30.0rc1" ;;
+            a3) suffix="-a3" ; default_base="v0.30.0rc1-a3" ;;
             *) echo "unsupported soc: ${{ inputs.soc }}" >&2 ; exit 1 ;;
           esac
           base_tag="${{ inputs.base_tag }}"

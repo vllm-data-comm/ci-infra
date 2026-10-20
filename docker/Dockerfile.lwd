@@ -17,10 +17,12 @@
 #
 
 # BASE_TAG (optional): tag of the official vllm-ascend image to layer on.
-# It must already satisfy the torch pin of the vllm fork: if pip reinstalls
-# torch, it will fight the torch-npu baked into the base image.
+# It must satisfy BOTH pins of the forks: the torch pin of the vllm fork
+# (if pip reinstalls torch, it fights the baked torch-npu) and the CANN
+# version the vllm-ascend fork's csrc is written against (the rc2 image
+# moved to CANN 9.2.0 and rejects the fork's 9.1.0-era op definitions).
 ARG BASE_IMAGE="quay.io/ascend/vllm-ascend"
-ARG BASE_TAG="v0.30.0rc2"
+ARG BASE_TAG="v0.30.0rc1"
 
 FROM ${BASE_IMAGE}:${BASE_TAG}
 
