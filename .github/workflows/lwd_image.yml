@@ -66,6 +66,7 @@ jobs:
         with:
           repository: vllm-data-comm/ci-infra
           ref: main
+          path: ci
           sparse-checkout: docker
 
       - name: Resolve the build parameters
@@ -109,7 +110,7 @@ jobs:
             fi
           fi
           docker buildx build \
-            --file docker/Dockerfile.lwd \
+            --file ci/docker/Dockerfile.lwd \
             --platform linux/arm64 \
             --build-arg BASE_TAG="${base_tag}" \
             "${tags[@]}" \
