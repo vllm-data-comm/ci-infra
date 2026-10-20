@@ -40,7 +40,7 @@ flowchart LR
     end
 
     subgraph official[official vllm-ascend image]
-        Base[quay.io/ascend/vllm-ascend:v0.30.0rc2[-a3]]
+        Base[quay.io/ascend/vllm-ascend:v0.30.0rc1[-a3]]
     end
 
     Caller --> Build
@@ -53,8 +53,9 @@ flowchart LR
 
 Decisions:
 
-- **Layer on a pinned official release tag, not `nightly-main`.** `v0.30.0rc2` is the newest release family on quay.io (2026-10-13). `nightly-main` changes daily, and the day upstream moves its torch pin, our fork's `torch == 2.13.0` pin would make pip reinstall torch against the base's torch-npu and the build would break for a non-obvious reason.
-- **The base tag must track the vllm fork's torch pin.** Bumping one requires bumping the other, in the same ci-infra PR. The tag lives in two places on purpose: as the `BASE_TAG` default in `docker/Dockerfile.lwd` (for local builds) and in the workflow's `Resolve the build parameters` step (the effective default); both move together.
+- **Layer on a pinned official release tag, not `nightly-main`.** `nightly-main` changes daily, and the day upstream moves its torch pin, our fork's `torch == 2.13.0` pin would make pip reinstall torch against the base's torch-npu and the build would break for a non-obvious reason.
+- **The pinned tag is `v0.30.0rc1` (2026-10-12), not the newer `rc2`.** The base must satisfy both forks at once, and no other public tag does: `v0.30.0rc1` pairs vllm v0.30.0 (torch 2.13, matching the vllm fork) with CANN 9.1.0 (matching the vllm-ascend fork's 2026-09-30 baseline). `rc2` switched the image train to CANN 9.2.0 (2026-10-13), whose opc tool rejects the fork's 9.1.0-era op definitions — first build attempt failed on `CausalConv1d` with exactly that. Older release families are CANN 9.1.0 but pair an older vllm/torch, which breaks the vllm fork's pin the other way.
+- **The base tag tracks both forks' pins.** Re-pin it in the same ci-infra PR that changes either the vllm fork's torch pin or the vllm-ascend fork's CANN baseline (e.g. once the vllm-ascend fork syncs to rc2-era upstream, bump the base to `rc2` and re-enable the custom kernels check). The tag lives in two places on purpose: as the `BASE_TAG` default in `docker/Dockerfile.lwd` (for local builds) and in the workflow's `Resolve the build parameters` step (the effective default); both move together.
 - **Builds run on `ubuntu-24.04-arm`.** Free for public repositories, native arm64, no QEMU. Docker's data root is moved to the 65 GB `/mnt` disk: the base image alone is ~7 GB and the 14 GB system disk is not enough.
 - **No third-party docker actions.** Plain `docker buildx build` / `docker login` steps keep the workflow free of SHA pins to maintain; the only third-party action is `actions/checkout`, pinned as elsewhere in ci-infra.
 - **Tags answer two questions: "what is newest" and "what did I run".** See the table below. The rolling tag moves only when the caller sets `nightly: true`, so an ad-hoc dispatch for debugging never silently overwrites `nightly`.
