@@ -1,0 +1,63 @@
+#
+# Copyright (c) 2026 Huawei Technologies Co., Ltd. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+# This file is a part of the LWD project, layered on the official
+# vllm-ascend image (https://quay.io/ascend/vllm-ascend).
+#
+
+# BASE_TAG (optional): tag of the official vllm-ascend image to layer on.
+# It must already satisfy the torch pin of the vllm fork: if pip reinstalls
+# torch, it will fight the torch-npu baked into the base image.
+ARG BASE_IMAGE="quay.io/ascend/vllm-ascend"
+ARG BASE_TAG="v0.30.0rc2"
+
+FROM ${BASE_IMAGE}:${BASE_TAG}
+
+# ASCEND_INDEX_URL (optional): extra pip index for Ascend packages.
+ARG ASCEND_INDEX_URL="https://mirrors.huaweicloud.com/ascend/repos/pypi"
+
+SHELL ["/bin/bash", "-c"]
+
+WORKDIR /workspace
+
+# Swap in the LWD forks. The base image installs both packages in editable
+# mode from /vllm-workspace, so replacing the trees and re-running the
+# editable installs is all that is needed.
+COPY vllm/ /vllm-workspace/vllm/
+COPY vllm-ascend/ /vllm-workspace/vllm-ascend/
+
+# Reinstall vLLM from the LWD fork (rebuilds its C extension). The base
+# image already satisfies the torch pin, so the heavy stack is untouched.
+# vLLM pulls in x86 triton, which does not work on Ascend; the base image
+# ships triton-ascend instead.
+RUN VLLM_TARGET_DEVICE="empty" python3 -m pip install -e "/vllm-workspace/vllm[audio]" && \
+    python3 -m pip uninstall -y triton && \
+    python3 -m pip cache purge
+
+# Reinstall vllm-ascend from the LWD fork (rebuilds its csrc extensions).
+RUN export PIP_EXTRA_INDEX_URL="${ASCEND_INDEX_URL}" && \
+    export VLLM_BATCH_INVARIANT=1 && \
+    source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
+    source /usr/local/Ascend/nnal/atb/set_env.sh && \
+    python3 -m pip install -e /vllm-workspace/vllm-ascend/ && \
+    python3 -m pip cache purge
+
+# Rebuild the Rust frontend from the LWD fork's sources.
+ENV PATH="/root/.cargo/bin:${PATH}"
+RUN cd /vllm-workspace/vllm && \
+    export PROTOC_INCLUDE=/usr/include && \
+    python3 -m pip install setuptools-rust && \
+    ./build_rust.sh
+
+CMD ["/bin/bash"]

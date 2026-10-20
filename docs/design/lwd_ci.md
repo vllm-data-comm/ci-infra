@@ -79,16 +79,22 @@ ci-infra/
 ├── .github/workflows/
 │   ├── lwd_fast.yml         reusable: fast lane jobs and lwd-fast-gate
 │   ├── lwd_checklist.yml    reusable: render and upsert the checklist comment
+│   ├── lwd_image.yml        reusable: nightly image build and push (see lwd_image.md)
 │   └── test.yml             ci-infra's own CI: pytest and actionlint
+├── docker/
+│   └── Dockerfile.lwd       layered LWD image, on the official vllm-ascend image
 ├── lwd_checks/              check scripts and catalog, Python standard library only
 ├── scripts/
 │   └── disable_inherited_workflows.sh
 └── tests/
 
-vllm/.github/workflows/      (vllm-ascend: same)
+vllm/.github/workflows/
 ├── lwd_fast.yml             calls ci-infra lwd_fast.yml@main
-└── lwd_checklist.yml        on workflow_run of the fast lane; calls ci-infra lwd_checklist.yml@main
+├── lwd_checklist.yml        on workflow_run of the fast lane; calls ci-infra lwd_checklist.yml@main
+└── lwd_image.yml            nightly + dispatch; calls ci-infra lwd_image.yml@main
 ```
+
+`vllm-ascend` carries the fast lane and the relay only.
 
 Decisions:
 
@@ -229,6 +235,10 @@ One comment per PR, created by the relay and updated in place. It is posted even
 - A PR can edit the caller workflows to skip checks. CODEOWNERS covers this in `vllm` and `vllm-ascend`: every file, `.github/` included, needs committer review.
 - ci-infra requires no approval, so a ci-infra change reaches both repositories' gates without a second reviewer. Its `test.yml` is the remaining gate.
 - Forks of first-time contributors need a committer's approval before workflows run (the repository default, kept).
+
+## Image builds
+
+Nightly images are built by the same layering: a thin `lwd_image.yml` caller in `vllm` (schedule plus dispatch) calls the reusable builder here, which layers the two forks' sources on a pinned official vllm-ascend image and pushes to `ghcr.io/vllm-data-comm/lwd`. It is a deployment artifact, not a check, so it stays outside the lane model. Design and runbook: [`lwd_image.md`](lwd_image.md).
 
 ## Rollout
 
