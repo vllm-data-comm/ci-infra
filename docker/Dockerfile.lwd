@@ -33,26 +33,33 @@ SHELL ["/bin/bash", "-c"]
 
 WORKDIR /workspace
 
-# Swap in the LWD forks. The base image installs both packages in editable
-# mode from /vllm-workspace, so replacing the trees and re-running the
-# editable installs is all that is needed.
+# Swap in the vllm fork. The base image installs the package in editable
+# mode from /vllm-workspace, so replacing the tree and re-running the
+# editable install is all that is needed.
 COPY vllm/ /vllm-workspace/vllm/
-COPY vllm-ascend/ /vllm-workspace/vllm-ascend/
 
-# Reinstall vLLM from the LWD fork (rebuilds its C extension). The base
-# image already satisfies the torch pin, so the heavy stack is untouched.
-# vLLM pulls in x86 triton, which does not work on Ascend; the base image
-# ships triton-ascend instead.
+# Overlay the vllm-ascend sources without deleting anything: the base
+# image's prebuilt csrc artifacts (csrc/build, loaded at runtime) must
+# survive the swap, exactly like a git checkout on a real machine.
+COPY vllm-ascend/ /tmp/lwd-vllm-ascend/
+RUN tar -C /tmp/lwd-vllm-ascend --exclude=.git -cf - . | \
+        tar -C /vllm-workspace/vllm-ascend -xf - && \
+    rm -rf /tmp/lwd-vllm-ascend
+
+# Reinstall vLLM from the LWD fork. The base image already satisfies the
+# torch pin, so the heavy stack is untouched. vLLM pulls in x86 triton,
+# which does not work on Ascend; the base image ships triton-ascend.
 RUN VLLM_TARGET_DEVICE="empty" python3 -m pip install -e "/vllm-workspace/vllm[audio]" && \
     python3 -m pip uninstall -y triton && \
     python3 -m pip cache purge
 
-# Reinstall vllm-ascend from the LWD fork (rebuilds its csrc extensions).
+# Reinstall vllm-ascend from the LWD fork as pure Python, keeping the base
+# image's prebuilt custom kernels. The fork's csrc does not build
+# standalone (its CausalConv1d op definition and compile info disagree),
+# and the LWD bring-up runs on the official prebuilt stack anyway.
+# TODO(lwd): build the fork's csrc once it compiles cleanly again (issue #18).
 RUN export PIP_EXTRA_INDEX_URL="${ASCEND_INDEX_URL}" && \
-    export VLLM_BATCH_INVARIANT=1 && \
-    source /usr/local/Ascend/ascend-toolkit/set_env.sh && \
-    source /usr/local/Ascend/nnal/atb/set_env.sh && \
-    python3 -m pip install -e /vllm-workspace/vllm-ascend/ && \
+    COMPILE_CUSTOM_KERNELS=0 python3 -m pip install -e /vllm-workspace/vllm-ascend/ && \
     python3 -m pip cache purge
 
 # Rebuild the Rust frontend from the LWD fork's sources.
