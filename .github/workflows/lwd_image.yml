@@ -28,8 +28,12 @@ on:
         default: false
         description: "also move the rolling nightly tag"
 
+# A reusable workflow's own permissions block applies and can only narrow
+# the caller's grant, so packages: write must be restated here: without it
+# the caller's grant is dropped and the ghcr.io push is denied.
 permissions:
   contents: read
+  packages: write
 
 env:
   LWD_IMAGE: ghcr.io/vllm-data-comm/lwd
