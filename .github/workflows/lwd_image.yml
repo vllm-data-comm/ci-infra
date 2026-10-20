@@ -1,0 +1,121 @@
+name: LWD Image
+
+on:
+  workflow_call:
+    inputs:
+      soc:
+        type: string
+        required: true
+        description: "SoC variant: a2 or a3"
+      vllm_ref:
+        type: string
+        default: main
+        description: "vllm fork ref to build from"
+      vllm_ascend_ref:
+        type: string
+        default: main
+        description: "vllm-ascend fork ref to build from"
+      base_tag:
+        type: string
+        default: ""
+        description: "override the pinned official base image tag"
+      push:
+        type: boolean
+        default: false
+        description: "push the image to ghcr.io"
+      nightly:
+        type: boolean
+        default: false
+        description: "also move the rolling nightly tag"
+
+permissions:
+  contents: read
+
+env:
+  LWD_IMAGE: ghcr.io/vllm-data-comm/lwd
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - name: Move docker's data root to the larger disk
+        run: |
+          sudo systemctl stop docker
+          sudo mv /var/lib/docker /mnt/docker
+          printf '{"data-root":"/mnt/docker"}' | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          # The default docker driver cannot push; use a container builder.
+          docker buildx create --use
+          df -h / /mnt
+
+      - name: Check out the vllm fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: vllm-data-comm/vllm
+          ref: ${{ inputs.vllm_ref }}
+          path: ctx/vllm
+      - name: Check out the vllm-ascend fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: vllm-data-comm/vllm-ascend
+          ref: ${{ inputs.vllm_ascend_ref }}
+          path: ctx/vllm-ascend
+      - name: Check out the Dockerfile
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: vllm-data-comm/ci-infra
+          ref: main
+          sparse-checkout: docker
+
+      - name: Resolve the build parameters
+        run: |
+          case "${{ inputs.soc }}" in
+            a2) suffix="" ; default_base="v0.30.0rc2" ;;
+            a3) suffix="-a3" ; default_base="v0.30.0rc2-a3" ;;
+            *) echo "unsupported soc: ${{ inputs.soc }}" >&2 ; exit 1 ;;
+          esac
+          base_tag="${{ inputs.base_tag }}"
+          if [ -z "$base_tag" ]; then base_tag="$default_base"; fi
+          vllm_sha=$(git -C ctx/vllm rev-parse --short HEAD)
+          vllm_ascend_sha=$(git -C ctx/vllm-ascend rev-parse --short HEAD)
+          {
+            echo "suffix=$suffix"
+            echo "base_tag=$base_tag"
+            echo "vllm_sha=$vllm_sha"
+            echo "vllm_ascend_sha=$vllm_ascend_sha"
+          } >> "$GITHUB_ENV"
+          {
+            echo "### LWD image (${{ inputs.soc }})"
+            echo "- vllm: \`${{ inputs.vllm_ref }}\` @ \`${vllm_sha}\`"
+            echo "- vllm-ascend: \`${{ inputs.vllm_ascend_ref }}\` @ \`${vllm_ascend_sha}\`"
+            echo "- image: \`${LWD_IMAGE}\`, layered on base tag \`${base_tag}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log in to ghcr.io
+        if: ${{ inputs.push }}
+        run: echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build the image
+        run: |
+          printf '**/.git\n' > ctx/.dockerignore
+          tags=(--tag "${LWD_IMAGE}:sha-${vllm_sha}${suffix}")
+          output=(--load)
+          if [ "${{ inputs.push }}" = true ]; then
+            output=(--push)
+            tags+=(--tag "${LWD_IMAGE}:nightly-$(date -u +%Y%m%d)${suffix}")
+            if [ "${{ inputs.nightly }}" = true ]; then
+              tags+=(--tag "${LWD_IMAGE}:nightly${suffix}")
+            fi
+          fi
+          docker buildx build \
+            --file docker/Dockerfile.lwd \
+            --platform linux/arm64 \
+            --build-arg BASE_TAG="${base_tag}" \
+            "${tags[@]}" \
+            "${output[@]}" \
+            ctx
+
+      - name: Inspect the pushed image
+        if: ${{ inputs.push }}
+        run: docker buildx imagetools inspect "${LWD_IMAGE}:sha-${vllm_sha}${suffix}"

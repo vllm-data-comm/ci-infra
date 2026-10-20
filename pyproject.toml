@@ -8,6 +8,11 @@ dependencies = []
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.14"]
 
+# Explicit packages: flat-layout auto-discovery would also pick up the new
+# docker/ directory and refuse to build.
+[tool.setuptools]
+packages = ["lwd_checks"]
+
 [tool.ruff]
 line-length = 88
 target-version = "py312"
