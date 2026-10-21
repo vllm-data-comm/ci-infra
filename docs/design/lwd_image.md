@@ -49,6 +49,7 @@ flowchart LR
     Build --> Dockerfile
     Build -->|docker buildx| Base
     Build -->|push| Ghcr[ghcr.io/vllm-data-comm/lwd]
+    Build -->|mirror, same tags| Quay[quay.io/vllm-data-comm/lwd]
 ```
 
 Decisions:
@@ -69,6 +70,7 @@ Decisions:
 Expected duration on the 4-core arm runner: roughly 30 minutes to 1.5 hours, dominated by the vllm editable install and the Rust frontend rebuild. The first build also downloads build dependencies that pip's isolation does not reuse.
 
 - **vllm-ascend is overlaid, not replaced, and installed as pure Python.** The base image's prebuilt csrc kernels (`csrc/build`, loaded at runtime) survive the source swap — a full-tree `COPY` would delete them, and the fork's csrc does not build standalone anyway (its CausalConv1d op definition and compile info disagree; identical failure under CANN 9.1.0 and 9.2.0). `COMPILE_CUSTOM_KERNELS=0` keeps the official prebuilt kernels, mirroring how the real-machine bring-up swaps Python sources on top of a working install. Revisit once the fork's csrc builds cleanly (issue #18).
+- **Every tag is mirrored to `quay.io/vllm-data-comm/lwd`.** Measured from the real-machine network: quay.io at 3.4 MB/s vs ghcr.io at 0.7 MB/s (and public ghcr mirrors at 1.2 MB/s), so quay is the primary pull target for the intranet. The mirror step re-runs `docker buildx build --push` against the local layer cache — it only uploads, it never rebuilds — and is skipped when `QUAY_USERNAME`/`QUAY_PASSWORD` are absent from the caller's secrets, so forks can still run the workflow. Prerequisites (one-time): a public quay repository `lwd` in the `vllm-data-comm` org, a robot account with Write on it, and the two secrets in `vllm-data-comm/vllm`.
 
 ## Runbook
 
@@ -78,12 +80,13 @@ First publish (one org-admin step):
 gh api --method PATCH /orgs/vllm-data-comm/packages/container/lwd -f visibility=public
 ```
 
-Pull from a real machine (mirror prefixes if ghcr.io is slow):
+Pull from a real machine (quay.io first — it measured fastest from the intranet; ghcr and its public mirrors are the fallbacks):
 
 ```bash
-docker pull ghcr.io/vllm-data-comm/lwd:nightly
-# or: docker pull m.daocloud.io/ghcr.io/vllm-data-comm/lwd:nightly
-docker run --rm ghcr.io/vllm-data-comm/lwd:nightly \
+docker pull quay.io/vllm-data-comm/lwd:nightly
+# fallbacks, same tags: ghcr.io/vllm-data-comm/lwd:nightly
+#                      m.daocloud.io/ghcr.io/vllm-data-comm/lwd:nightly (requires a free DaoCloud login)
+docker run --rm quay.io/vllm-data-comm/lwd:nightly \
   python3 -c "import torch, torch_npu, vllm, vllm_ascend; print('ok')"
 ```
 

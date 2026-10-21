@@ -37,6 +37,7 @@ permissions:
 
 env:
   LWD_IMAGE: ghcr.io/vllm-data-comm/lwd
+  QUAY_IMAGE: quay.io/vllm-data-comm/lwd
 
 jobs:
   build:
@@ -104,14 +105,19 @@ jobs:
       - name: Build the image
         run: |
           printf '**/.git\n' > ctx/.dockerignore
-          tags=(--tag "${LWD_IMAGE}:sha-${vllm_sha}${suffix}")
+          tag_names="sha-${vllm_sha}${suffix}"
+          tags=(--tag "${LWD_IMAGE}:${tag_names}")
           output=(--load)
           if [ "${{ inputs.push }}" = true ]; then
             output=(--push)
-            tags+=(--tag "${LWD_IMAGE}:nightly-$(date -u +%Y%m%d)${suffix}")
+            tag_names="${tag_names} nightly-$(date -u +%Y%m%d)${suffix}"
             if [ "${{ inputs.nightly }}" = true ]; then
-              tags+=(--tag "${LWD_IMAGE}:nightly${suffix}")
+              tag_names="${tag_names} nightly${suffix}"
             fi
+            echo "tag_names=${tag_names}" >> "$GITHUB_ENV"
+            for name in ${tag_names}; do
+              tags+=(--tag "${LWD_IMAGE}:${name}")
+            done
           fi
           docker buildx build \
             --file ci/docker/Dockerfile.lwd \
@@ -119,6 +125,31 @@ jobs:
             --build-arg BASE_TAG="${base_tag}" \
             "${tags[@]}" \
             "${output[@]}" \
+            ctx
+
+      - name: Mirror the image to quay.io
+        if: ${{ inputs.push }}
+        env:
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+          QUAY_PASSWORD: ${{ secrets.QUAY_PASSWORD }}
+        run: |
+          if [ -z "${QUAY_USERNAME}" ] || [ -z "${QUAY_PASSWORD}" ]; then
+            echo "no quay credentials passed, skipping the mirror"
+            exit 0
+          fi
+          echo "${QUAY_PASSWORD}" | docker login quay.io -u "${QUAY_USERNAME}" --password-stdin
+          tags=()
+          for name in ${tag_names}; do
+            tags+=(--tag "${QUAY_IMAGE}:${name}")
+          done
+          # The layers are already in the local builder cache, so this build
+          # only uploads them to quay.io.
+          docker buildx build \
+            --file ci/docker/Dockerfile.lwd \
+            --platform linux/arm64 \
+            --build-arg BASE_TAG="${base_tag}" \
+            "${tags[@]}" \
+            --push \
             ctx
 
       - name: Inspect the pushed image
