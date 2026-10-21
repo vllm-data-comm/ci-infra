@@ -1,0 +1,15 @@
+# Static per-model diff over the lwd-tool baseline (docs/design/lwd_tool.md).
+model: qwen3.6-27b
+weights_dir: Qwen3.6-27B
+served_name: qwen3.6
+max_model_len: 262144
+max_num_seqs: 230
+max_num_batched_tokens: 8192
+speculative:
+  method: qwen3_5_mtp
+  num_speculative_tokens: 3
+  enforce_eager: true
+workarounds:
+  - role: cloud
+    flags: [--no-enable-prefix-caching]
+    reason: "cloud prefix-cache IndexError (Bug #8, vllm #18); drop once fixed"
