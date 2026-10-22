@@ -66,16 +66,15 @@ jobs:
           repository: vllm-data-comm/vllm-ascend
           ref: ${{ inputs.vllm_ascend_ref }}
           path: ctx/vllm-ascend
-      # Full checkout: the build needs the tool sources and packaging files,
-      # and the sparse list with file paths silently materialized nothing
-      # under git 2.55's cone mode. The repo is tiny; ctx/.dockerignore keeps
-      # .git out of the build context.
+      # Full checkout INSIDE the build context (ctx/): COPY in the
+      # Dockerfile resolves against the context root, so a checkout anywhere
+      # else is invisible to the build. ctx/.dockerignore keeps .git out.
       - name: Check out the ci-infra sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: vllm-data-comm/ci-infra
           ref: main
-          path: ci
+          path: ctx/ci
 
       - name: Resolve the build parameters
         run: |
@@ -123,7 +122,7 @@ jobs:
             done
           fi
           docker buildx build \
-            --file ci/docker/Dockerfile.lwd \
+            --file ctx/ci/docker/Dockerfile.lwd \
             --platform linux/arm64 \
             --build-arg BASE_TAG="${base_tag}" \
             "${tags[@]}" \
@@ -148,7 +147,7 @@ jobs:
           # The layers are already in the local builder cache, so this build
           # only uploads them to quay.io.
           docker buildx build \
-            --file ci/docker/Dockerfile.lwd \
+            --file ctx/ci/docker/Dockerfile.lwd \
             --platform linux/arm64 \
             --build-arg BASE_TAG="${base_tag}" \
             "${tags[@]}" \
