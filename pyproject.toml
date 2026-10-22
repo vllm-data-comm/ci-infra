@@ -27,7 +27,10 @@ lwd_tool = ["models/*.yaml"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-extend-exclude = ["docs"] # plans are snapshots; their snippets stay as written
+extend-exclude = [
+  "docs",   # plans are snapshots; their snippets stay as written
+  "vllm",   # the vllm checkout used by lwd_tool's topology tests (see test.yml)
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "UP"]

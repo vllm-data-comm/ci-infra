@@ -15,9 +15,10 @@ RUNTIME_SCHEMA_REL = Path("vllm") / "config" / "lwd" / "topology.py"
 
 
 def _sibling_candidates() -> list[Path]:
-    """Vllm checkouts sitting next to this package, for dev machines."""
+    """Vllm checkouts sitting next to or inside the working directory."""
     package_dir = Path(__file__).resolve().parent
     candidates = [parent.parent / "vllm" for parent in package_dir.parents[:5]]
+    candidates.append(Path.cwd() / "vllm")  # ci test.yml checks out ./vllm
     candidates.append(Path.cwd().parent / "vllm")
     return candidates
 
