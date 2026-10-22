@@ -66,13 +66,19 @@ jobs:
           repository: vllm-data-comm/vllm-ascend
           ref: ${{ inputs.vllm_ascend_ref }}
           path: ctx/vllm-ascend
-      - name: Check out the Dockerfile
+      - name: Check out the ci-infra sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: vllm-data-comm/ci-infra
           ref: main
           path: ci
-          sparse-checkout: docker
+          sparse-checkout: |
+            docker
+            lwd_tool
+            lwd_checks
+            pyproject.toml
+            README.md
+            LICENSE
 
       - name: Resolve the build parameters
         run: |

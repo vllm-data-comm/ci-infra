@@ -69,4 +69,15 @@ RUN cd /vllm-workspace/vllm && \
     python3 -m pip install setuptools-rust && \
     ./build_rust.sh
 
+# Install lwd-tool (the LWD launch CLI) plus its model profiles; pure Python,
+# and pyyaml is already in the base image. --no-deps keeps the pinned stack
+# untouched; the checkout lives under ci/ in the build context (see
+# lwd_image.yml).
+COPY ci/pyproject.toml ci/README.md ci/LICENSE /tmp/lwd-tool-src/
+COPY ci/lwd_tool/ /tmp/lwd-tool-src/lwd_tool/
+COPY ci/lwd_checks/ /tmp/lwd-tool-src/lwd_checks/
+RUN python3 -m pip install --no-deps /tmp/lwd-tool-src && \
+    rm -rf /tmp/lwd-tool-src && \
+    lwd-tool plan --help > /dev/null
+
 CMD ["/bin/bash"]

@@ -3,7 +3,15 @@ name = "lwd-checks"
 version = "0.1.0"
 description = "CI checks shared by vllm-data-comm repositories"
 requires-python = ">=3.12"
-dependencies = []
+# pyyaml serves lwd_tool only; lwd_checks stays stdlib-only.
+dependencies = ["pyyaml>=6"]
+
+[project.scripts]
+lwd-tool = "lwd_tool.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.14"]
@@ -11,12 +19,18 @@ dev = ["pytest>=8", "ruff>=0.14"]
 # Explicit packages: flat-layout auto-discovery would also pick up the new
 # docker/ directory and refuse to build.
 [tool.setuptools]
-packages = ["lwd_checks"]
+packages = ["lwd_checks", "lwd_tool"]
+
+[tool.setuptools.package-data]
+lwd_tool = ["models/*.yaml"]
 
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-extend-exclude = ["docs"] # plans are snapshots; their snippets stay as written
+extend-exclude = [
+  "docs",   # plans are snapshots; their snippets stay as written
+  "vllm",   # the vllm checkout used by lwd_tool's topology tests (see test.yml)
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "B", "I", "UP"]

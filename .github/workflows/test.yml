@@ -14,6 +14,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # lwd_tool's topology tests reuse tools/gen_lwd_topology.py from the
+      # vllm fork; without a checkout they skip (find_vllm_root finds nothing).
+      # checkout v7 refuses paths outside the workspace, so it lands in ./vllm
+      # (ruff and .gitignore keep out of it).
+      - name: Check out the vllm fork
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: vllm-data-comm/vllm
+          ref: main
+          fetch-depth: 1
+          path: vllm
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
