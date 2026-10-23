@@ -26,9 +26,6 @@ ARG BASE_TAG="v0.30.0rc1"
 
 FROM ${BASE_IMAGE}:${BASE_TAG}
 
-# ASCEND_INDEX_URL (optional): extra pip index for Ascend packages.
-ARG ASCEND_INDEX_URL="https://mirrors.huaweicloud.com/ascend/repos/pypi"
-
 SHELL ["/bin/bash", "-c"]
 
 WORKDIR /workspace
@@ -46,20 +43,21 @@ RUN tar -C /tmp/lwd-vllm-ascend --exclude=.git -cf - . | \
         tar -C /vllm-workspace/vllm-ascend -xf - && \
     rm -rf /tmp/lwd-vllm-ascend
 
-# Reinstall vLLM from the LWD fork. The base image already satisfies the
-# torch pin, so the heavy stack is untouched. vLLM pulls in x86 triton,
-# which does not work on Ascend; the base image ships triton-ascend.
-RUN VLLM_TARGET_DEVICE="empty" python3 -m pip install -e "/vllm-workspace/vllm[audio]" && \
-    python3 -m pip uninstall -y triton && \
+# Reinstall vLLM from the LWD fork with the manual workflow's command
+# (AGENTS.md). The base image already satisfies every runtime dependency;
+# letting pip re-resolve them drifts the pinned stack (issue #37).
+RUN cd /vllm-workspace/vllm && \
+    VLLM_TARGET_DEVICE=empty python3 -m pip install -v -e . && \
     python3 -m pip cache purge
 
-# Reinstall vllm-ascend from the LWD fork as pure Python, keeping the base
-# image's prebuilt custom kernels. The fork's csrc does not build
-# standalone (its CausalConv1d op definition and compile info disagree),
-# and the LWD bring-up runs on the official prebuilt stack anyway.
+# Reinstall vllm-ascend from the LWD fork as pure Python with the manual
+# workflow's --no-deps/--no-build-isolation, keeping the base image's
+# prebuilt custom kernels. Dependency resolution must stay off: it would
+# re-pull x86 triton from PyPI and break the base image's triton-ascend
+# stack (issue #37).
 # TODO(lwd): build the fork's csrc once it compiles cleanly again (issue #18).
-RUN export PIP_EXTRA_INDEX_URL="${ASCEND_INDEX_URL}" && \
-    COMPILE_CUSTOM_KERNELS=0 python3 -m pip install -e /vllm-workspace/vllm-ascend/ && \
+RUN cd /vllm-workspace/vllm-ascend && \
+    COMPILE_CUSTOM_KERNELS=0 python3 -m pip install -v -e . --no-build-isolation --no-deps && \
     python3 -m pip cache purge
 
 # Rebuild the Rust frontend from the LWD fork's sources.
