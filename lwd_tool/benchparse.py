@@ -7,6 +7,8 @@ is the summary table the team reports by hand (issue #37 style: actual request
 rate, system ttft/tpot, throughput, concurrency, max concurrency, median ITL).
 """
 
+from __future__ import annotations
+
 import sys
 from collections.abc import Iterator
 from pathlib import Path
@@ -59,7 +61,10 @@ def parse_bench_tables(
         elif cells[0] == COMMON_TABLE_TITLE:
             perf_stats = None
         elif perf_stats is not None:
-            perf[cells[0]] = dict(zip(perf_stats, cells[2:], strict=True))
+            values = cells[2:]
+            if len(values) != len(perf_stats):  # zip(strict=) is py3.10+ only
+                raise LwdToolError(f"ragged row in the perf table: {cells[0]}")
+            perf[cells[0]] = dict(zip(perf_stats, values))
         else:
             common[cells[0]] = cells[2]
     if not perf and not common:

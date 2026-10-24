@@ -6,9 +6,19 @@ scripts in vllm issue #18 (2026-10-21); any diff here means the generator
 drifted and needs a second look.
 """
 
-import json
+from __future__ import annotations
 
+import json
+import sys
+
+import pytest
 from scenario import CLOUD_IP, EDGE_IP, make_plan
+
+# argv goldens come from full plan derivation, which runs vllm's own
+# gen_lwd_topology.py (py3.10+ syntax)
+pytestmark = pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="runs vllm's py3.10+ gen_lwd_topology.py"
+)
 
 W = "<WEIGHTS>"
 

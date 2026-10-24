@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Derive the full launch plan: ports, parallel sizes, env and serve argv."""
 
+from __future__ import annotations
+
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass

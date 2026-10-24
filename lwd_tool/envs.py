@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The static env baseline shared by every role, plus dynamic injection."""
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 
 CODEBASE_DIR = "/vllm-workspace"

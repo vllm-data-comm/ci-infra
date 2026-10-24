@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +14,11 @@ from lwd_tool.topology import (
     cross_check,
     find_vllm_root,
     generate_topology,
+)
+
+# topology generation executes vllm's own gen_lwd_topology.py (py3.10+ syntax)
+pytestmark = pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="runs vllm's py3.10+ gen_lwd_topology.py"
 )
 
 

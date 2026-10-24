@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Topology generation by reusing vllm's tools/gen_lwd_topology.py."""
 
+from __future__ import annotations
+
 import runpy
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 from . import LwdToolError
 from .args import PeerSpec
@@ -17,7 +17,8 @@ RUNTIME_SCHEMA_REL = Path("vllm") / "config" / "lwd" / "topology.py"
 def _sibling_candidates() -> list[Path]:
     """Vllm checkouts sitting next to or inside the working directory."""
     package_dir = Path(__file__).resolve().parent
-    candidates = [parent.parent / "vllm" for parent in package_dir.parents[:5]]
+    # list() first: py3.9's PurePath.parents does not support slicing
+    candidates = [parent.parent / "vllm" for parent in list(package_dir.parents)[:5]]
     candidates.append(Path.cwd() / "vllm")  # ci test.yml checks out ./vllm
     candidates.append(Path.cwd().parent / "vllm")
     return candidates
@@ -88,6 +89,9 @@ def generate_topology(
     vllm_root: Path,
 ) -> str:
     """Render lwd_topology.yaml text; rank allocation stays in vllm's tool."""
+    # lazy: only this path needs pyyaml, so monitor runs on bare python hosts
+    import yaml
+
     namespace = runpy.run_path(str(vllm_root / GENERATOR_REL))
     if "build_topology" not in namespace:
         raise LwdToolError(

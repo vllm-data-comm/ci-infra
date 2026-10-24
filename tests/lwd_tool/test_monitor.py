@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for the /metrics dashboard (golden: the issue #42 fixture)."""
 
+from __future__ import annotations
+
 import io
 import math
 from pathlib import Path

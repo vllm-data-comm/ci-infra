@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from lwd_checks.title_check import lwd_check_title, lwd_parse_title_tags

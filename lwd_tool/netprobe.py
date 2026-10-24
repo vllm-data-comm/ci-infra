@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Find which network interface holds a given local IP (read-only probe)."""
 
+from __future__ import annotations
+
 import re
 import subprocess
 from collections.abc import Mapping

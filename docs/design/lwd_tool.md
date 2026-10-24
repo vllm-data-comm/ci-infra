@@ -100,6 +100,19 @@ The image build (`docker/Dockerfile.lwd`, `lwd_image.yml`) copies the tool and
 its profiles from the ci-infra checkout and installs them with `--no-deps`, so
 tool and vllm code always ship together under the same image tag.
 
+On a bare host with just a system python (>=3.9, nothing installed), run the
+read-only commands straight from a clone — no pip, no pyyaml needed:
+
+```bash
+python lwd-tool.py monitor 76.76.26.180:9724
+```
+
+`monitor`/`parse`/`stop`/`logs` work this way; `run`/`plan`/`health` still
+need >=3.10 (they execute vllm's own `gen_lwd_topology.py`, which uses py3.10+
+syntax — in practice the container) and `health` also loads a model profile.
+pyyaml is imported lazily in `load_profile`/`generate_topology` so the
+read-only path never needs it.
+
 ## Verification
 
 - `uv run pytest tests/ -q` — includes argv golden snapshots for the

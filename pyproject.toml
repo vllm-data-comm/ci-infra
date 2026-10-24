@@ -2,7 +2,9 @@
 name = "lwd-checks"
 version = "0.1.0"
 description = "CI checks shared by vllm-data-comm repositories"
-requires-python = ">=3.12"
+# lwd_tool also runs standalone on bare python>=3.9 hosts via lwd-tool.py
+# (no install); the installed package and CI still target 3.12.
+requires-python = ">=3.9"
 # pyyaml serves lwd_tool only; lwd_checks stays stdlib-only.
 dependencies = ["pyyaml>=6"]
 
@@ -26,7 +28,7 @@ lwd_tool = ["models/*.yaml"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py39"
 extend-exclude = [
   "docs",   # plans are snapshots; their snippets stay as written
   "vllm",   # the vllm checkout used by lwd_tool's topology tests (see test.yml)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from lwd_checks.ast_diff import (
     lwd_count_params,
     lwd_parse_classes,

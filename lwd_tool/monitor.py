@@ -6,6 +6,8 @@ Replaces the hand-pasted vllm_monitor.sh: the four sections of the script
 plus per-refresh rates for the counters and P99 alongside P50. Stdlib only.
 """
 
+from __future__ import annotations
+
 import math
 import re
 import sys

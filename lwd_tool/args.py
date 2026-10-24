@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Parsed and validated launch arguments, before any derivation."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from ipaddress import ip_address
 from typing import Any
@@ -136,7 +138,7 @@ class LaunchArgs:
         )
 
     @classmethod
-    def from_namespace(cls, ns: Any) -> "LaunchArgs":
+    def from_namespace(cls, ns: Any) -> LaunchArgs:
         """Build from an argparse namespace (see cli.build_parser)."""
         role = ns.role
         edge = parse_peer(ns.edge, "--edge") if ns.edge else None

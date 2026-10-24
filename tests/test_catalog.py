@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from lwd_checks.catalog import (
     LWD_CHECK_CATALOG,
     LWD_LANES,

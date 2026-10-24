@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from lwd_checks.gate import lwd_gate
 from lwd_checks.results import LwdCheckResult
 
