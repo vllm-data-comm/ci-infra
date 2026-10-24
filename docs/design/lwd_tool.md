@@ -110,3 +110,38 @@ tool and vllm code always ship together under the same image tag.
   CI checks one out next to the repo (`test.yml`), elsewhere those tests skip.
 - Real-machine bring-up (cloud-first on 187, edge on 180, then `health`) is
   tracked in vllm issue #18.
+
+## Metrics dashboard (`monitor`)
+
+vllm issue #42 (RFC) replaces the hand-pasted `vllm_monitor.sh` with a
+subcommand: the four sections of the script, plus per-refresh rates for the
+counters and P99 alongside P50.
+
+```bash
+lwd-tool monitor                          # http://localhost:9724, 2s refresh
+lwd-tool monitor 76.76.26.180:9724 --interval 1
+lwd-tool monitor --once | tee panel.txt   # single snapshot, plain text
+```
+
+- Sections: 请求状态 (running / waiting / KV cache %), 延迟 (TTFT / TPOT / ITL
+  P50 and P99), 吞吐 (prompt / generation tokens, finished requests — totals
+  plus rates), 投机解码 (drafts, draft tokens, accepted, accept rate, mean
+  accept length including the bonus token, per-position accepted counts).
+  Anything the endpoint does not expose renders as `N/A`; a missing spec
+  section collapses to `未开启`.
+- Quantiles come from the histogram buckets: the first bucket whose cumulative
+  count reaches `count*q` (the script's rule); past the last finite bucket
+  renders `>max`. TPOT resolves `vllm:request_time_per_output_token_seconds`
+  or the legacy `vllm:time_per_output_token_seconds`, whichever the endpoint
+  has.
+- Aggregation ignores labels: counters and gauges sum over the series of a
+  family (data-parallel ranks, `finished_reason`), KV usage is the mean across
+  series. The default URL is the edge serve port (`--port-base`, 9724) — the
+  edge is the client entry, so running/waiting/TTFT live there.
+- Rates divide the counter delta by the actual elapsed time between polls; a
+  counter that went backwards (vllm restarted) reads `N/A` for one poll while
+  the baseline re-establishes.
+- Stdlib only. On a tty the frame repaints in place (ANSI home + clear-below);
+  piped output appends one frame per poll. `Ctrl+C` exits cleanly with code 0.
+  Loop mode keeps retrying with an `[ERROR]` frame when the endpoint is
+  unreachable (the script's behavior); `--once` fails fast instead.
