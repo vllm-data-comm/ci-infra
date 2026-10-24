@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
 
 import json
 import shutil
 import socket
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -243,6 +245,9 @@ class FakePopen:
         return 7
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="runs vllm's py3.10+ gen_lwd_topology.py"
+)
 def test_run_plan_writes_artifacts_and_reports_exit_code(
     tmp_path: Path, interfaces, weights_fs, vllm_root
 ):
@@ -277,6 +282,9 @@ def test_run_plan_writes_artifacts_and_reports_exit_code(
     assert records[0][1]["serve_port"] == port
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="runs vllm's py3.10+ gen_lwd_topology.py"
+)
 def test_run_plan_refuses_a_taken_port(tmp_path, interfaces, weights_fs, vllm_root):
     port = free_port()
     holder = socket.socket()
@@ -352,6 +360,9 @@ def test_logs_tails_the_latest_record(tmp_path: Path):
     assert logs("edge", launch_dir=launch_dir, follow=False) == 0
 
 
+@pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="runs vllm's py3.10+ gen_lwd_topology.py"
+)
 def test_format_summary_lists_the_digest_and_mount_hint(
     interfaces, weights_fs, vllm_root
 ):

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pathlib import Path
 
 from gitrepo import lwd_clone_fork, lwd_commit, lwd_git, lwd_init

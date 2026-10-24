@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The vllm logging dictConfig that writes Python logs to file only."""
 
+from __future__ import annotations
+
 import json
 from typing import Any
 

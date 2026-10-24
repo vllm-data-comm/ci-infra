@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from lwd_checks.catalog import LWD_CHECK_CATALOG
 from lwd_checks.render import lwd_render_checklist
 from lwd_checks.results import LwdCheckResult, LwdFinding

@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """The lwd-tool command line: run / plan / stop / logs / health / monitor / parse."""
 
+from __future__ import annotations
+
 import argparse
 import os
 import sys

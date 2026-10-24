@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for bench result table parsing (golden: issue #37 run output)."""
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import pytest

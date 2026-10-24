@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Scan /proc for processes tagged with a lwd-tool run id."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 

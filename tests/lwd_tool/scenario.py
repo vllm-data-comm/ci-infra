@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Shared two-machine scenario constants and plan builder for the tests."""
 
+from __future__ import annotations
+
 from datetime import datetime
 from pathlib import Path
 

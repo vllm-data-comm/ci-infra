@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,6 +14,11 @@ from scenario import (
 
 from lwd_tool import LwdToolError
 from lwd_tool.args import PeerSpec
+
+# plan derivation executes vllm's own gen_lwd_topology.py, which needs py3.10+
+pytestmark = pytest.mark.skipif(
+    sys.version_info < (3, 10), reason="runs vllm's py3.10+ gen_lwd_topology.py"
+)
 
 
 def argv_text(plan) -> str:

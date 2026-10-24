@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 
 from lwd_checks.commits_check import lwd_check_commits

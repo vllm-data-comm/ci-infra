@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """Model profiles: the static per-model diff over the shared baseline."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-
-import yaml
 
 from . import LwdToolError
 from .args import ROLES
@@ -124,6 +124,9 @@ def _parse_workarounds(raw: Any) -> tuple[Workaround, ...]:
 
 
 def load_profile(name: str, models_dir: Path = MODELS_DIR) -> ModelProfile:
+    # lazy: only this path needs pyyaml, so monitor runs on bare python hosts
+    import yaml
+
     path = models_dir / f"{name}.yaml"
     if not path.is_file():
         available = sorted(p.stem for p in models_dir.glob("*.yaml"))
