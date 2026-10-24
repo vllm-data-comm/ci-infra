@@ -145,3 +145,21 @@ lwd-tool monitor --once | tee panel.txt   # single snapshot, plain text
   piped output appends one frame per poll. `Ctrl+C` exits cleanly with code 0.
   Loop mode keeps retrying with an `[ERROR]` frame when the endpoint is
   unreachable (the script's behavior); `--once` fails fast instead.
+
+## Bench result summary (`parse`)
+
+After a benchmark run, the team reports a one-row summary in the issue
+(issue #37 style). `lwd-tool parse` extracts it from the benchmark's
+terminal output so the numbers are never re-typed by hand:
+
+```bash
+lwd-tool parse result.log     # or: cat result.log | lwd-tool parse -
+```
+
+- Input: the two box-drawn result tables ("Performance Parameters" per-metric
+  stats, "Common Metric" totals); anything else around them is ignored.
+- Output: the markdown summary row — actual request rate, system ttft/tpot,
+  output throughput, concurrency, max concurrency, median ITL. Latency
+  metrics take the Median stat.
+- Reading is byte-based with explicit UTF-8 decoding, so piping works on any
+  locale; missing fields fail fast naming the field.

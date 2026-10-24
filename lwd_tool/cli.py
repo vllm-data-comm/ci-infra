@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The lwd-tool command line: run / plan / stop / logs / health / monitor."""
+"""The lwd-tool command line: run / plan / stop / logs / health / monitor / parse."""
 
 import argparse
 import os
@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 from . import LwdToolError
 from .args import ROLE_EDGE, ROLE_SERVER, ROLES, LaunchArgs
+from .benchparse import bench_parse
 from .monitor import DEFAULT_URL, monitor
 from .netprobe import probe_interfaces
 from .plan import derive_launch_plan, derive_serve_port, format_summary
@@ -113,6 +114,12 @@ def build_parser() -> argparse.ArgumentParser:
     monitor_p.add_argument(
         "--once", action="store_true", help="print one snapshot and exit"
     )
+    parse_p = sub.add_parser(
+        "parse", help="parse bench result tables into a markdown summary row"
+    )
+    parse_p.add_argument(
+        "file", nargs="?", default="-", help="bench output file (default: stdin)"
+    )
     return parser
 
 
@@ -186,6 +193,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return health(host, port, served_name, timeout_s=ns.timeout)
         if ns.command == "monitor":
             return monitor(ns.url, interval_s=ns.interval, once=ns.once)
+        if ns.command == "parse":
+            return bench_parse(ns.file)
         parser.error(f"unknown command {ns.command!r}")
     except LwdToolError as error:
         print(f"error: {error}", file=sys.stderr)
