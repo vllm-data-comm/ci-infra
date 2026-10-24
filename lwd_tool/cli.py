@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0
-"""The lwd-tool command line: run / plan / stop / logs / health."""
+"""The lwd-tool command line: run / plan / stop / logs / health / monitor."""
 
 import argparse
 import os
@@ -8,6 +8,7 @@ from collections.abc import Sequence
 
 from . import LwdToolError
 from .args import ROLE_EDGE, ROLE_SERVER, ROLES, LaunchArgs
+from .monitor import DEFAULT_URL, monitor
 from .netprobe import probe_interfaces
 from .plan import derive_launch_plan, derive_serve_port, format_summary
 from .profile import load_profile
@@ -94,6 +95,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     health_p.add_argument("--timeout", type=int, default=600)
     add_launch_args(health_p)
+    monitor_p = sub.add_parser(
+        "monitor", help="poll a vllm /metrics endpoint and show a dashboard"
+    )
+    monitor_p.add_argument(
+        "url",
+        nargs="?",
+        default=DEFAULT_URL,
+        help=f"metrics base URL (default: {DEFAULT_URL})",
+    )
+    monitor_p.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        help="seconds between refreshes (default: 2)",
+    )
+    monitor_p.add_argument(
+        "--once", action="store_true", help="print one snapshot and exit"
+    )
     return parser
 
 
@@ -165,6 +184,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             served_name = largs.served_name or profile.served_name or profile.name
             host, port, _ = _health_target(largs, served_name)
             return health(host, port, served_name, timeout_s=ns.timeout)
+        if ns.command == "monitor":
+            return monitor(ns.url, interval_s=ns.interval, once=ns.once)
         parser.error(f"unknown command {ns.command!r}")
     except LwdToolError as error:
         print(f"error: {error}", file=sys.stderr)
