@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 *.egg-info/
 /vllm/
+/scripts/lwd_image_builder.conf

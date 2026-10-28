@@ -1,0 +1,40 @@
+# Site configuration for scripts/lwd_build_image.sh and
+# scripts/lwd_registry_gc.sh, deployed on the internal builder machine.
+# Copy to scripts/lwd_image_builder.conf (gitignored) and adjust.
+# Every key is optional for the build script except REGISTRY when
+# pushing; flags override this file.
+
+# Where the build keeps its persistent source clones (ctx/), state
+# (journal, lock) and logs. Put it on the big disk.
+WORK_DIR=/data/lwd-image-builder
+
+# Push target, <host-or-ip>:<port>. Use the name the CONSUMERS will use:
+# the registry keys repositories by the name in the push, so pushing via
+# 127.0.0.1 would create a second, separate repository.
+REGISTRY=builder-host.example.com:5000
+
+# http on the intranet by default; set https only if you also mount a
+# certificate into the compose file (see the design doc).
+REGISTRY_SCHEME=http
+
+# Optional basic-auth credentials (docker login on the consumers should
+# use the same pair). Leave empty to run the registry anonymously.
+REGISTRY_USER=
+REGISTRY_PASSWORD=
+
+# Source remotes; ssh:// URLs work too if the builder pushes via ssh.
+VLLM_REMOTE=https://github.com/vllm-data-comm/vllm.git
+VLLM_ASCEND_REMOTE=https://github.com/vllm-data-comm/vllm-ascend.git
+
+# Registry retention: manifests older than KEEP_DAYS are deleted (with
+# all their tags, including the sha- tag; the rolling nightly tag and
+# its digest are always kept).
+KEEP_DAYS=14
+
+# Fail fast when the work dir or the docker data root drops below this
+# many free GB (a base-tag bump needs a full new base image).
+MIN_FREE_GB=40
+
+# Consumed by docker/registry/docker-compose.yml (exported on purpose).
+export LWD_REGISTRY_DATA=/data/lwd-registry
+export LWD_REGISTRY_PORT=5000
