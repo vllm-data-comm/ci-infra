@@ -1,0 +1,28 @@
+# Internal LWD image registry, deployed on the builder machine.
+# Operation (GC, retention, backup) is documented in
+# docs/design/lwd_image_internal.md.
+#
+# Requires LWD_REGISTRY_DATA in the environment (the bind mount for the
+# blob store — put it on the big disk); refuses to start without it:
+#   set -a; . scripts/lwd_image_builder.conf; set +a
+#   docker compose -f docker/registry/docker-compose.yml up -d
+#
+# Plain HTTP on the intranet by design; enable htpasswd auth with the
+# commented lines below (see the design doc for the TLS upgrade path).
+services:
+  registry:
+    image: registry:2.8.3
+    container_name: lwd-registry
+    restart: unless-stopped
+    ports:
+      - "${LWD_REGISTRY_PORT:-5000}:5000"
+    environment:
+      # lwd_build_image.sh's retention deletes manifests over the API.
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+      # Enable basic auth (uncomment all three plus the /auth mount):
+      # REGISTRY_AUTH: htpasswd
+      # REGISTRY_AUTH_HTPASSWD_REALM: lwd-registry
+      # REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+    volumes:
+      - "${LWD_REGISTRY_DATA:?set LWD_REGISTRY_DATA (see lwd_image_builder.conf.example)}:/var/lib/registry"
+      # - ./auth:/auth:ro
