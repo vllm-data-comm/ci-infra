@@ -17,6 +17,10 @@ Design and rules: [docs/design/lwd_ci.md](docs/design/lwd_ci.md).
   reusable workflows called by the product repositories.
 - `.github/workflows/lwd_image.yml` — nightly lwd image build (includes
   `lwd-tool`), called by the product repositories.
+- `scripts/lwd_build_image.sh`, `scripts/lwd_registry_gc.sh`,
+  `docker/registry/` — the internal image pipeline: build on the
+  intranet builder, serve from an intranet registry. Design and deploy
+  manual: [docs/design/lwd_image_internal.md](docs/design/lwd_image_internal.md).
 - `scripts/disable_inherited_workflows.sh` — disable upstream-inherited
   workflows in a product repository; rerun after every upstream sync.
 
