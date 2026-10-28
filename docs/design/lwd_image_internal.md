@@ -148,6 +148,22 @@ Note: `docker pull` on the builder itself pulls through the registry
 like any other machine — that is on purpose, so the builder tests
 exactly what it serves.
 
+### Proxy model (who pulls what — and why dockerd never restarts)
+
+| Actor | What it fetches externally | Where the proxy lives | Change cost |
+| --- | --- | --- | --- |
+| buildx builder container (BuildKit) | quay base image; pypi / rustup / crates.io inside the build | `BUILDER_HTTP(S)_PROXY` in the conf, injected as driver opts | `docker buildx rm` + next run recreates (seconds) |
+| registry container | nothing, ever | n/a | n/a |
+| host docker daemon | `registry:2.8.3` and the BuildKit image, once at setup | site daemon config, one time | once, at setup |
+| consumers | nothing external | n/a | n/a |
+
+The base pull and all in-build fetches are performed by BuildKit inside
+the builder container, not by the host daemon — so day-to-day proxy
+changes are a builder-container recreation and never a dockerd restart.
+The internal registry is always injected into the builder's `no_proxy`,
+so pushes and layer transfers never leave the intranet even when a
+proxy is configured.
+
 ### Crontab (builder)
 
 ```cron

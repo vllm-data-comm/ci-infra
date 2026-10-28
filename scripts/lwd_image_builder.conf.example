@@ -26,6 +26,16 @@ REGISTRY_PASSWORD=
 VLLM_REMOTE=https://github.com/vllm-data-comm/vllm.git
 VLLM_ASCEND_REMOTE=https://github.com/vllm-data-comm/vllm-ascend.git
 
+# Proxy carried by the buildx builder container: it is what pulls the
+# quay base image and runs the in-build fetches (pypi / rustup /
+# crates.io) — the host docker daemon is not involved and never needs a
+# proxy (or a restart). To change the proxy, run
+# `docker buildx rm lwd-image-builder`; the next build recreates it.
+# The internal registry is ALWAYS excluded from the proxy automatically.
+#BUILDER_HTTP_PROXY=http://proxy.example.com:8080
+#BUILDER_HTTPS_PROXY=http://proxy.example.com:8080
+#BUILDER_NO_PROXY=localhost,127.0.0.1
+
 # Registry retention: manifests older than KEEP_DAYS are deleted (with
 # all their tags, including the sha- tag; the rolling nightly tag and
 # its digest are always kept).

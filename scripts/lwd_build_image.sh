@@ -25,6 +25,9 @@ REGISTRY_USER=
 REGISTRY_PASSWORD=
 VLLM_REMOTE=https://github.com/vllm-data-comm/vllm.git
 VLLM_ASCEND_REMOTE=https://github.com/vllm-data-comm/vllm-ascend.git
+BUILDER_HTTP_PROXY=
+BUILDER_HTTPS_PROXY=
+BUILDER_NO_PROXY=
 KEEP_DAYS=14
 MIN_FREE_GB=40
 
@@ -283,8 +286,22 @@ main() {
             || die "registry $REGISTRY_SCHEME://$REGISTRY is unreachable"
     fi
 
+    # The base pull (quay) and every in-build fetch (pypi, rustup,
+    # crates) are performed by BuildKit INSIDE the builder container,
+    # not by the host daemon — so the site proxy lives on that container
+    # and changing it means recreating the builder (docker buildx rm
+    # lwd-image-builder, seconds), never restarting dockerd. The
+    # internal registry is always excluded: pushes must stay on the
+    # intranet even when a proxy is configured.
+    local driver_opts=()
+    [ -n "$BUILDER_HTTP_PROXY" ] \
+        && driver_opts+=(--driver-opt "env.http_proxy=$BUILDER_HTTP_PROXY")
+    [ -n "$BUILDER_HTTPS_PROXY" ] \
+        && driver_opts+=(--driver-opt "env.https_proxy=$BUILDER_HTTPS_PROXY")
+    driver_opts+=(--driver-opt "env.no_proxy=${REGISTRY}${BUILDER_NO_PROXY:+,$BUILDER_NO_PROXY}")
     docker buildx inspect lwd-image-builder >/dev/null 2>&1 \
-        || docker buildx create --name lwd-image-builder --driver docker-container
+        || docker buildx create --name lwd-image-builder \
+            --driver docker-container "${driver_opts[@]}"
     docker buildx use lwd-image-builder >/dev/null
 
     prepare_context
